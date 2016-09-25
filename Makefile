@@ -5,14 +5,18 @@ ifndef NNVM_PATH
 	NNVM_PATH = $(ROOTDIR)/nnvm
 endif
 
+ifndef CUDA_PATH
+	CUDA_PATH = /usr/local/cuda
+endif
 TORCH_PATH=${TORCH_HOME}
 
 export LDFLAGS = -pthread -lm
 export CFLAGS =  -std=c++11 -Wall -O2 -msse2  -Wno-unknown-pragmas -funroll-loops\
 	  -fPIC -I${NNVM_PATH}/include -Iinclude -Idmlc-core/include
 
-CFLAGS += -I$(TORCH_PATH)/install/include -I$(TORCH_PATH)/install/include/TH -I$(TORCH_PATH)/install/include/THC/
-LDFLAGS += -L$(TORCH_PATH)/install/lib -lluajit -lluaT -lTH -lTHC
+CFLAGS += -I$(TORCH_PATH)/install/include -I$(TORCH_PATH)/install/include/TH \
+	 	  -I$(TORCH_PATH)/install/include/THC/ -I$(CUDA_PATH)/include/
+LDFLAGS += -L$(TORCH_PATH)/install/lib -lluajit -lluaT -lTH -lTHC -L$(CUDA_PATH)/lib64
 
 .PHONY: clean all test lint doc
 
