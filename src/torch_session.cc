@@ -3,6 +3,7 @@
 #include <nnvm/pass_functions.h>
 
 #include <memory>
+#include <functional>
 #include "./torch_util.h"
 
 namespace tinyflow {
@@ -13,6 +14,7 @@ using nnvm::IndexedGraph;
 using nnvm::ShapeVector;
 using nnvm::DTypeVector;
 using nnvm::StorageVector;
+
 
 class TorchExecutor;
 
@@ -46,6 +48,8 @@ struct VarState {
 
 // shared variable map structure
 using VarStateMap = std::unordered_map<std::string, std::shared_ptr<VarState> >;
+// operator executor closures
+using FOpExec = std::function<void ()>;
 
 // torch session.
 class TorchSession : public Session {
@@ -114,7 +118,7 @@ class TorchExecutor {
   // internal storage space.
   std::vector<LuaRef> storage_pool_;
   // operator executor closures
-  std::vector<LuaRef> op_execs_;
+  std::vector<FOpExec> op_execs_;
   // lua module states of each operator.
   std::vector<LuaRef> op_exec_modules_;
   // The storage space to hold outputs.
@@ -206,7 +210,8 @@ const std::vector<TBlob>&
 TorchExecutor::Run(const std::unordered_map<std::string, TBlob>& inputs) {
   Setup(inputs);
   for (size_t i = 0; i < op_execs_.size(); ++i) {
-    if (!op_execs_[i].is_nil()) op_execs_[i]();
+    // TODO if (!op_execs_[i].is_nil()) op_execs_[i]();
+    if (op_execs_[i]) op_execs_[i]();
   }
   {
     // copy outputs
@@ -497,7 +502,7 @@ void TorchExecutor::SetupOpExecs() {
   for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
     const auto& inode = idx[nid];
     if (inode.source->is_variable()) continue;
-    std::vector<LuaRef> in_array, out_array;
+    std::vector<LuaRef> in_array, out_array; // TODO
     for (const auto& e : inode.inputs) {
       in_array.push_back(data_entry_[idx.entry_id(e)]);
     }
@@ -517,7 +522,7 @@ void TorchExecutor::SetupOpExecs() {
       }
       op_execs_[nid] = fcreate_nnforward_closure(
           op_exec_modules_[nid], in_array[0], out_array[0], weights);
-      CHECK_EQ(in_array.size(), 1) << "onnly support tensor nn module";
+      CHECK_EQ(in_array.size(), 1) << "only support tensor nn module";
     } else {
       LOG(FATAL) << "Function FLuaCompute is not registered on "
                  << inode.source->op()->name;
