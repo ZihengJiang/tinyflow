@@ -58,6 +58,7 @@ struct TBlob {
  * \note Register as FLuaCompute
  */
 using FLuaCompute = std::string;
+using FRtcCompute = std::string;
 
 /*!
  * \brief a lua code to create a NN module for an op.

@@ -384,6 +384,8 @@ void TorchExecutor::SetupOpExecs() {
       nnvm::Op::GetAttr<FLuaCreateNNModule>("FLuaCreateNNModule");
   const auto& lua_compute_code =
       nnvm::Op::GetAttr<FLuaCompute>("FLuaCompute");
+  const auto& rtc_compute =
+      nnvm::Op::GetAttr<FRtcCompute>("FRtcCompute");
   LuaRef fcreate_fcompute_closure = lua->Eval(R"(
     return
     function(fcompute, ins, outs)
@@ -510,6 +512,13 @@ void TorchExecutor::SetupOpExecs() {
       uint32_t eid = idx.entry_id(nid, index);
       out_array.push_back(data_entry_[eid]);
     }
+    // if (rtc_compute.count(inode.source->op())) {
+    //   in_array "x0", "x1",
+    //   out_array "y"
+    //   Rtc::Rtc rtc(name, in_array, out_array, kernel);
+    //   op_execs_[nid] = [rtc, in_array, out_array]() {
+    //     rtc.Run(in_array, out_array);
+    //   };
     if (lua_compute_code.count(inode.source->op())) {
       std::string lua_str = "return " + lua_compute_code[inode.source->op()];
       LuaRef fcompute = lua->Eval(lua_str);

@@ -84,6 +84,10 @@ function(x, y)
   torch.add(y[1], x[1], x[2])
 end
 )");
+// .set_attr<FRtcCompute>(
+//     "FRtcCompute", R"(
+// y[threadIdx.x] = x0[threadIdx.x] + x1[threadIdx.x];
+// )")
 
 
 NNVM_REGISTER_OP(__mul_symbol__)
