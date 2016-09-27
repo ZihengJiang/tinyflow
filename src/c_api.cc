@@ -1,6 +1,7 @@
 // Copyright (c) 2016 by Contributors
 #include <tinyflow/base.h>
 #include <tinyflow/c_api.h>
+#include <tinyflow/rtc.h>
 
 /*!
  * \brief handle exception throwed out
@@ -35,6 +36,22 @@ struct TinyAPIThreadLocalEntry {
 };
 
 using namespace tinyflow;
+
+int NNTBlobCreate(float* dptr,
+                  const nn_uint* shape_data,
+                  const nn_uint ndim,
+                  const nn_uint dtype,
+                  const nn_uint dev_mask,
+                  TBlobHandle* out) {
+  API_BEGIN();
+  TBlob* ptblob = new TBlob();
+  ptblob->data   = (void*)dptr;  // NOLINT(*)
+  ptblob->shape  = TShape(shape_data, shape_data + ndim);
+  ptblob->dev_mask = dev_mask;
+  ptblob->dtype = dtype;
+  *out = ptblob;
+  API_END();
+}
 
 int NNSessionCreate(SessionHandle* handle) {
   API_BEGIN();
@@ -90,4 +107,57 @@ int NNSessionRun(SessionHandle handle,
   *out_shape_data = dmlc::BeginPtr(ret->shape_data);
   API_END();
   return 0;
+}
+
+int RtcCreate(char* name, nn_uint num_input, nn_uint num_output,
+              char** inputs_name, char** outputs_name,
+              TBlobHandle*  inputs, TBlobHandle*  outputs,
+              char* kernel, RtcHandle *out) {
+  API_BEGIN();
+  std::vector<std::pair<std::string, TBlob> > input, output;
+  for (nn_uint i = 0; i < num_input; ++i) {
+    input.push_back(std::pair<std::string, TBlob>(inputs_name[i],
+                                                   *reinterpret_cast<TBlob*>(inputs[i])));
+  }
+  for (nn_uint i = 0; i < num_output; ++i) {
+    output.push_back(std::pair<std::string, TBlob>(outputs_name[i],
+                                                    *reinterpret_cast<TBlob*>(outputs[i])));
+  }
+
+  Rtc *rtc = new Rtc(name, input, output, kernel);
+  *out = reinterpret_cast<RtcHandle>(rtc);
+  API_END();
+}
+
+int RtcRun(RtcHandle handle,
+           nn_uint num_input, nn_uint num_output,
+           TBlobHandle*  inputs, TBlobHandle*  outputs,
+           nn_uint gridDimX,
+           nn_uint gridDimY,
+           nn_uint gridDimZ,
+           nn_uint blockDimX,
+           nn_uint blockDimY,
+           nn_uint blockDimZ) {
+  API_BEGIN();
+  std::vector<TBlob> input, output;
+  for (nn_uint i = 0; i < num_input; ++i) {
+    input.push_back(*reinterpret_cast<TBlob*>(inputs[i]));
+  }
+  for (nn_uint i = 0; i < num_output; ++i) {
+    output.push_back(*reinterpret_cast<TBlob*>(outputs[i]));
+  }
+  reinterpret_cast<Rtc*>(handle)->Run(input, output,
+                                      gridDimX,
+                                      gridDimY,
+                                      gridDimZ,
+                                      blockDimX,
+                                      blockDimY,
+                                      blockDimZ);
+  API_END();
+}
+
+int RtcFree(RtcHandle handle) {
+  API_BEGIN();
+  delete reinterpret_cast<Rtc*>(handle);
+  API_END();
 }
