@@ -16,7 +16,8 @@ export CFLAGS =  -std=c++11 -Wall -O2 -msse2  -Wno-unknown-pragmas -funroll-loop
 
 CFLAGS += -I$(TORCH_PATH)/install/include -I$(TORCH_PATH)/install/include/TH \
 	 	  -I$(TORCH_PATH)/install/include/THC/ -I$(CUDA_PATH)/include/
-LDFLAGS += -L$(TORCH_PATH)/install/lib -lluajit -lluaT -lTH -lTHC -L$(CUDA_PATH)/lib64
+LDFLAGS += -L$(TORCH_PATH)/install/lib -lluajit -lluaT -lTH -lTHC \
+		   -L$(CUDA_PATH)/lib64 -lcuda -lnvrtc -lcudart
 
 .PHONY: clean all test lint doc
 
