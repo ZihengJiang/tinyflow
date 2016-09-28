@@ -19,7 +19,7 @@ NNVM_DLL int NNTBlobCreate(float* dptr,
                   const nn_uint dev_mask,
                   TBlobHandle* out);
 
-NNVM_DLL int NNSessionCreate(SessionHandle* handle);
+NNVM_DLL int NNSessionCreate(SessionHandle* handle, const char* option);
 
 NNVM_DLL int NNSessionClose(SessionHandle handle);
 
@@ -33,6 +33,7 @@ NNVM_DLL int NNSessionRun(SessionHandle handle,
                           const nn_uint* feed_shape_data,
                           nn_uint* num_out,
                           const float*** out_dptr,
+                          const nn_uint** out_dtype,
                           const nn_uint **out_shape_ndim,
                           const nn_uint ***out_shape_data);
 

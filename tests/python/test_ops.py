@@ -66,6 +66,21 @@ def test_mean():
     npy = ax.mean(axis=tuple(axis))
     assert(np.mean(np.abs(ay - npy))) < 1e-6
 
+def test_argmax():
+    x = tf.placeholder(tf.float32)
+    y = tf.argmax(x, 1)
+    ax = np.random.uniform(size=(700, 10))
+    sess = tf.Session()
+    ay = sess.run(y, feed_dict={x:ax})
+    npy = np.argmax(ax, 1)
+    assert(np.mean(np.abs(ay - npy))) < 1e-6
+
 if __name__ == "__main__":
+    test_ewise()
+    test_sum()
     test_mean()
+    test_matmul()
+    test_bias_add()
+    test_softmax()
+    test_argmax()
     pass

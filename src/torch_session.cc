@@ -55,6 +55,12 @@ using FOpExec = std::function<void ()>;
 // torch session.
 class TorchSession : public Session {
  public:
+  // simple session that binds to one device.
+  explicit TorchSession(const std::string& default_device) {
+    if (default_device.find("gpu") != std::string::npos) {
+      default_dev_mask_ = kGPU;
+    }
+  }
   const std::vector<TBlob>&
   Run(nnvm::Symbol* sym,
       const std::unordered_map<std::string, TBlob>& inputs) override;
@@ -65,6 +71,7 @@ class TorchSession : public Session {
     std::shared_ptr<TorchExecutor> exec;
     size_t use_count{0};
   };
+  int default_dev_mask_{kCPU};
   // local cached variable states.
   VarStateMap states_;
   // cached executor
@@ -76,7 +83,7 @@ class TorchExecutor {
  public:
   // initialize the executor
   // possibly update the states.
-  void Init(nnvm::Symbol symbol, VarStateMap* states);
+  void Init(nnvm::Symbol symbol, VarStateMap* states, int default_dev_mask);
   /// run the executor, return the outputs.
   const std::vector<TBlob>& Run(const std::unordered_map<std::string, TBlob>& inputs);
   // return corresponding internal symbol
@@ -100,9 +107,12 @@ class TorchExecutor {
   // ----------------------------
   // node auxiliary data structures
   // The device of this executor
-  int dev_mask_{kCPU};
+  int dev_mask_{kGPU};
   // node id of place holder ops
   std::vector<uint32_t> placeholder_nids_;
+  // size of number of node, placeholder_tblobs_[nid].data != nullptr
+  // if nid is a placeholder and the content is the corresponding TBlob to be copied in.
+  std::vector<TBlob> placeholder_tblobs_;
   // node id of variable that is assigned in this executor
   std::vector<uint32_t> assign_var_nids_;
   // node id of variable that is readed by this executor
@@ -119,7 +129,7 @@ class TorchExecutor {
   // internal storage space.
   std::vector<LuaRef> storage_pool_;
   // operator executor closures
-  std::vector<FOpExec> op_execs_;
+  std::vector<LuaRef> op_execs_;
   // lua module states of each operator.
   std::vector<LuaRef> op_exec_modules_;
   // The storage space to hold outputs.
@@ -127,8 +137,8 @@ class TorchExecutor {
   std::vector<TBlob> output_blobs_;
 };
 
-Session* Session::Create(const std::string& type) {
-  return new TorchSession();
+Session* Session::Create(const std::string& option) {
+  return new TorchSession(option);
 }
 
 const std::vector<TBlob>& TorchSession::Run(
@@ -159,12 +169,16 @@ const std::vector<TBlob>& TorchSession::Run(
   cached_execs_.clear();
   ExecEntry e;
   e.exec = std::make_shared<TorchExecutor>();
-  e.exec->Init(*sym, &states_);
+  e.exec->Init(*sym, &states_, default_dev_mask_);
   cached_execs_[sym] = e;
   return e.exec->Run(inputs);
 }
 
-void TorchExecutor::Init(nnvm::Symbol symbol, VarStateMap* states) {
+void TorchExecutor::Init(nnvm::Symbol symbol,
+                         VarStateMap* states,
+                         int default_dev_mask) {
+  dev_mask_ = default_dev_mask;
+  if (dev_mask_ == kGPU) TorchState::ThreadLocalState()->InitGPU();
   graph_.outputs = symbol.outputs;
   symbol_ = std::move(symbol);
   // initialize all node auxiliary data structures.
@@ -175,6 +189,7 @@ void TorchExecutor::Init(nnvm::Symbol symbol, VarStateMap* states) {
 
   std::vector<int> read_count(idx.num_nodes(), 0);
   std::vector<int> assign_count(idx.num_nodes(), 0);
+  placeholder_tblobs_.resize(idx.num_nodes());
 
   for (uint32_t i = idx.num_nodes(); i != 0; --i) {
     uint32_t nid = i - 1;
@@ -210,9 +225,18 @@ void TorchExecutor::Init(nnvm::Symbol symbol, VarStateMap* states) {
 const std::vector<TBlob>&
 TorchExecutor::Run(const std::unordered_map<std::string, TBlob>& inputs) {
   Setup(inputs);
-  for (size_t i = 0; i < op_execs_.size(); ++i) {
-    // TODO if (!op_execs_[i].is_nil()) op_execs_[i]();
-    if (op_execs_[i]) op_execs_[i]();
+  {
+    // execution
+    const auto& idx = graph_.indexed_graph();
+    auto* th = TorchState::ThreadLocalState();
+    for (size_t i = 0; i < op_execs_.size(); ++i) {
+      // copy in place holder as demanded.
+      if (placeholder_tblobs_[i].data != nullptr) {
+        th->CopyFromTo(th->NewTensorShared(placeholder_tblobs_[i]),
+                       data_entry_[idx.entry_id(i, 0)]);
+      }
+      if (!op_execs_[i].is_nil()) op_execs_[i]();
+    }
   }
   {
     // copy outputs
@@ -239,13 +263,11 @@ void TorchExecutor::Setup(const std::unordered_map<std::string, TBlob>& inputs) 
   }
   {
     // copy inputs
-    auto* th = TorchState::ThreadLocalState();
     const auto& idx = graph_.indexed_graph();
     for (uint32_t nid : placeholder_nids_) {
       const std::string& key = idx[nid].source->attrs.name;
       const TBlob& value = inputs.at(key);
-      th->CopyFromTo(th->NewTensorShared(value),
-                     data_entry_[idx.entry_id(nid, 0)]);
+      placeholder_tblobs_[nid] = value;
     }
   }
 }
@@ -347,6 +369,7 @@ void TorchExecutor::SetupStorage() {
     }
   }
 
+
   // size of each storage pool entry
   std::vector<size_t> pool_entry_size;
   for (size_t i = 0; i < vshape.size(); ++i) {
@@ -395,13 +418,13 @@ void TorchExecutor::SetupOpExecs() {
   LuaRef fremove_module_storage = lua->Eval(R"(
     return
     function(m, dev_mask)
+      local empty = torch.FloatTensor()
+      if dev_mask == 2 then
+        m = m:cuda()
+        empty = empty:cuda()
+      end
       local W, gW = m:parameters()
       if W ~= nil then
-        local empty = torch.FloatTensor()
-        if dev_mask == 2 then
-          m = m:cuda()
-          empty = empty:cuda()
-        end
         for i, t in ipairs(W) do
           t:set(empty)
         end
@@ -472,7 +495,7 @@ void TorchExecutor::SetupOpExecs() {
         m:zeroGradParameters()
         m:accGradParameters(input, gradOutput, 1)
         m:updateGradInput(input, gradOutput)
-        if not m.gradInput.isSetTo(gradInput) then
+        if not m.gradInput:isSetTo(gradInput) then
           gradInput:copy(m.gradInput)
           m.gradInput:set(gradInput)
         end
