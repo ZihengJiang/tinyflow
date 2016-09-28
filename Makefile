@@ -42,6 +42,9 @@ ALL_DEP = $(OBJ) $(LIB_DEP)
 
 all: lib/libtinyflow.so
 
+include tests/cpp/unittest.mk
+test: $(TEST)
+
 build/src/%.o: src/%.cc
 	@mkdir -p $(@D)
 	$(CXX) -std=c++11 $(CFLAGS) -MM -MT build/src/$*.o $< >build/src/$*.d

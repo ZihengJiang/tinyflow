@@ -17,6 +17,27 @@
 #include <utility>
 #include <unordered_map>
 
+#define CUDA_SAFE_CALL(x)                                               \
+  {                                                                     \
+    CUresult result = x;                                                \
+    if (result != CUDA_SUCCESS) {                                       \
+      const char *msg;                                                  \
+      cuGetErrorName(result, &msg);                                     \
+      dmlc::LogMessageFatal(__FILE__, __LINE__).stream()                \
+          << "CudaError: " #x " failed with error: " << msg;            \
+    }                                                                   \
+  }
+
+#define NVRTC_SAFE_CALL(x)                                              \
+  {                                                                     \
+    nvrtcResult result = x;                                             \
+    if (result != NVRTC_SUCCESS) {                                      \
+      dmlc::LogMessageFatal(__FILE__, __LINE__).stream()                \
+          << "NvrtcError: " #x " failed with error: "                   \
+          << nvrtcGetErrorString(result);                               \
+    }                                                                   \
+  }
+
 namespace tinyflow {
 
 typedef unsigned index_t;
