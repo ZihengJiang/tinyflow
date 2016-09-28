@@ -51,6 +51,8 @@ struct VarState {
 using VarStateMap = std::unordered_map<std::string, std::shared_ptr<VarState> >;
 // operator executor closures
 using FOpExec = std::function<void ()>;
+// take inputs & outputs, return compute closures
+using FRtcCompute = std::function<FOpExec (std::vector<LuaRef>, std::vector<LuaRef>)>;
 
 // torch session.
 class TorchSession : public Session {
@@ -129,7 +131,7 @@ class TorchExecutor {
   // internal storage space.
   std::vector<LuaRef> storage_pool_;
   // operator executor closures
-  std::vector<LuaRef> op_execs_;
+  std::vector<FOpExec> op_execs_;
   // lua module states of each operator.
   std::vector<LuaRef> op_exec_modules_;
   // The storage space to hold outputs.
@@ -235,7 +237,8 @@ TorchExecutor::Run(const std::unordered_map<std::string, TBlob>& inputs) {
         th->CopyFromTo(th->NewTensorShared(placeholder_tblobs_[i]),
                        data_entry_[idx.entry_id(i, 0)]);
       }
-      if (!op_execs_[i].is_nil()) op_execs_[i]();
+      // if (!op_execs_[i].is_nil()) op_execs_[i]();
+      if (op_execs_[i]) op_execs_[i]();
     }
   }
   {
@@ -538,14 +541,9 @@ void TorchExecutor::SetupOpExecs() {
       out_array.push_back(data_entry_[eid]);
     }
 
-    // if (rtc_compute.count(inode.source->op())) {
-    //   in_array "x0", "x1",
-    //   out_array "y"
-    //   Rtc::Rtc rtc(name, in_array, out_array, kernel);
-    //   op_execs_[nid] = [rtc, in_array, out_array]() {
-    //     rtc.Run(in_array, out_array);
-    //   };
-    if (lua_compute_code.count(inode.source->op())) {
+    if (rtc_compute.count(inode.source->op())) {
+      op_execs_[nid] = rtc_compute[inode.source->op()](in_array, out_array);
+    } else if (lua_compute_code.count(inode.source->op())) {
       // compute function
       std::string lua_str = "return " + lua_compute_code[inode.source->op()];
       LuaRef fcompute = lua->Eval(lua_str);

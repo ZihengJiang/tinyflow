@@ -28,18 +28,6 @@ Rtc::Rtc(const std::string& name,
   }
 }
 
-// static void PrintTBlob(const std::vector<TBlob>& input) {
-//   std::cout << std::endl << "Vector Size: " << input.size() << std::endl;
-//   for (auto &i : input) {
-//     CUdeviceptr* dptr = static_cast<CUdeviceptr*>(i.data);
-//     float* hptr = new float[i.shape[0]];
-//     cuMemcpyDtoH(hptr, *dptr, i.shape[0] * sizeof(float));
-//     for (uint j = 0; j < i.shape[0]; ++j)
-//       std::cout << hptr[j] << " ";
-//     std::cout << std::endl;
-//   }
-// }
-
 void Rtc::Run(std::vector<TBlob> const& input,
                  std::vector<TBlob> const& output,
                  unsigned int grid_dim_X,
