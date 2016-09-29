@@ -43,15 +43,32 @@ class TorchState {
     lua->Eval("require 'nn'");
     lua->Eval("torch.setdefaulttensortype('torch.FloatTensor')");
     LuaRef parse_tuple = lua->Eval(R"(
-      return function(s)
+      return function(s, def)
+        if s == nil then
+          return def
+        end
         t = {}
         for k in string.gmatch(s, '%d') do
-          table.insert(t, k)
+          table.insert(t, tonumber(k))
         end
         return t
       end
     )");
+    LuaRef zero_index_target_criterion = lua->Eval(R"(
+      return function(c)
+        local updateOutput = c.updateOutput
+        local updateGradInput = c.updateGradInput
+        c.updateOutput = function(self, input, target)
+          return updateOutput(self, input, target + 1)
+        end
+        c.updateGradInput = function(self, input, target)
+          return updateGradInput(self, input, target + 1)
+        end
+        return c
+      end
+    )");
     lua->SetGlobalField("nn_parse_tuple", parse_tuple);
+    lua->SetGlobalField("nn_zero_index_target_criterion", zero_index_target_criterion);
   }
   // prepare for GPU ops
   inline void InitGPU() {
@@ -60,6 +77,7 @@ class TorchState {
     auto* lua = LuaState::ThreadLocalState();
     lua->Eval("require 'cutorch'");
     lua->Eval("require 'cunn'");
+    lua->Eval("require 'cudnn'");
     LOG(INFO) << "finished gpu initialization...";
     gpu_init_ = true;
   }

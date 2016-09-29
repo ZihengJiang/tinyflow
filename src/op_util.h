@@ -58,6 +58,17 @@ inline bool SameShape(const NodeAttrs& attrs,
   return true;
 }
 
+// The output is a scalar.
+inline bool ScalarShape(const NodeAttrs& attrs,
+                        std::vector<TShape> *ishape,
+                        std::vector<TShape> *oshape) {
+  for (TShape& pshape : *ishape) {
+    if (pshape.ndim() == 0) return false;
+  }
+  SHAPE_ASSIGN(oshape->at(0), TShape{1});
+  return true;
+}
+
 inline std::vector<std::pair<int, int> > InplaceIn0Out0(const NodeAttrs& attrs) {
   return {{0, 0}};
 }
@@ -115,10 +126,12 @@ struct NNBackwardParam {
   uint32_t forward_readonly_inputs;
   // number of internal states in the op
   uint32_t num_states{0};
+  // number of inputs who do not have gradients.
+  uint32_t num_no_grad_inputs{0};
   // whether backward need all te inputs.
-  bool need_inputs;
+  bool need_inputs{true};
   // whether backward need all the outputs.
-  bool need_outputs;
+  bool need_outputs{true};
 };
 
 }  // namespace tinyflow
