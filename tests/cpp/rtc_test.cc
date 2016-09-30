@@ -35,10 +35,10 @@ int main() {
   y.dev_mask = tinyflow::kGPU;
   y.dtype = tinyflow::kFloat32;
 
-  std::vector<std::pair<std::string, TBlob> > input;
-  std::vector<std::pair<std::string, TBlob> > output;
-  input.push_back(std::pair<std::string, TBlob>("x", x));
-  output.push_back(std::pair<std::string, TBlob>("y", y));
+  std::vector<std::pair<std::string, TShape> > input;
+  std::vector<std::pair<std::string, TShape> > output;
+  input.push_back(std::pair<std::string, TShape>("x", x.shape));
+  output.push_back(std::pair<std::string, TShape>("y", y.shape));
   char kernel[] ="                                     \n\
       __shared__ float s_rec[10];                      \n\
       s_rec[threadIdx.x] = x[threadIdx.x];             \n\

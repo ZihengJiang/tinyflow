@@ -1,7 +1,6 @@
 // Copyright (c) 2016 by Contributors
 #include <tinyflow/base.h>
 #include <tinyflow/c_api.h>
-#include <tinyflow/rtc.h>
 
 /*!
  * \brief handle exception throwed out

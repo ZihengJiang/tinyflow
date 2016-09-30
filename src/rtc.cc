@@ -3,9 +3,9 @@
  * \file rtc.cc
  * \brief Wrapper for NVRTC
  */
-#include <tinyflow/rtc.h>
 #include <cuda_runtime.h>
 #include <iostream>
+#include "./rtc.h"
 #if true
 // #if ((TINYFLOW_USE_CUDA) && (TINYFLOW_USE_NVRTC))
 
@@ -14,8 +14,8 @@ const char Rtc::str_type[] = "float";
 std::unordered_map<std::string, char*> Rtc::kernel_registry;
 
 Rtc::Rtc(const std::string& name,
-         std::vector<std::pair<std::string, TBlob> > const& input,
-         std::vector<std::pair<std::string, TBlob> > const& output,
+         std::vector<std::pair<std::string, TShape> > const& input,
+         std::vector<std::pair<std::string, TShape> > const& output,
          const std::string& kernel) {
   name_ = name;
   num_input_ = input.size();
@@ -71,8 +71,8 @@ void Rtc::Run(std::vector<TBlob> const& input,
 }
 
 std::string Rtc::decorate(const std::string& name,
-                         std::vector<std::pair<std::string, TBlob> > const& input,
-                         std::vector<std::pair<std::string, TBlob> > const& output,
+                         std::vector<std::pair<std::string, TShape> > const& input,
+                         std::vector<std::pair<std::string, TShape> > const& output,
                          const std::string kernel) {
     std::string source;
     source = source + "\nextern \"C\" __global__ void " + name + "(";
@@ -86,20 +86,20 @@ std::string Rtc::decorate(const std::string& name,
     source = source + ") {\n";
     for (auto &i : input) {
         source = source + "const int " + i.first + "_ndim = " +
-                  std::to_string(i.second.shape.ndim()) + ";\n";
+                  std::to_string(i.second.ndim()) + ";\n";
         source = source + "const int " + i.first + "_dims[] = {";
-        for (index_t j = 0; j < i.second.shape.ndim(); ++j) {
-            source = source + std::to_string(i.second.shape[j]) + ",";
+        for (index_t j = 0; j < i.second.ndim(); ++j) {
+            source = source + std::to_string(i.second[j]) + ",";
         }
         source.pop_back();
         source = source + "};\n";
     }
     for (auto &i : output) {
         source = source + "const int " + i.first + "_ndim = " +
-                  std::to_string(i.second.shape.ndim()) + ";\n";
+                  std::to_string(i.second.ndim()) + ";\n";
         source = source + "const int " + i.first + "_dims[] = {";
-        for (index_t j = 0; j < i.second.shape.ndim(); ++j) {
-            source = source + std::to_string(i.second.shape[j]) + ",";
+        for (index_t j = 0; j < i.second.ndim(); ++j) {
+            source = source + std::to_string(i.second[j]) + ",";
         }
         source.pop_back();
         source = source + "};\n";
