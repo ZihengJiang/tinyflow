@@ -139,10 +139,6 @@ function(x, y, kwarg)
   end
 end
 )");
-// .set_attr<FRtcCompute>(
-//     "FRtcCompute", R"(
-// y[threadIdx.x] = x0[threadIdx.x] + x1[threadIdx.x];
-// )")
 
 
 NNVM_REGISTER_OP(mul)

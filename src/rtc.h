@@ -5,9 +5,8 @@
  */
 #ifndef TINYFLOW_RTC_H_
 #define TINYFLOW_RTC_H_
-#include <tinyflow/base.h>
-#if true
 // #if ((TINYFLOW_USE_CUDA) && (TINYFLOW_USE_NVRTC))
+#include <tinyflow/base.h>
 #include <nvrtc.h>
 #include <cuda.h>
 
@@ -57,10 +56,7 @@ class Rtc {
    * \param output list of output ndarrays and their name.
    * \param kernel cuda code.
    */
-  Rtc(const std::string& name,
-      std::vector<std::pair<std::string, TShape> > const& input,
-      std::vector<std::pair<std::string, TShape> > const& output,
-      const std::string& kernel);
+  Rtc(const std::string& name, const std::string& kernel);
   /*!
    * \brief launch a kernel with the engine.
    * \param input list of input ndarray.
@@ -92,13 +88,13 @@ class Rtc {
   std::unordered_map<int, CUmodule> module_;
   std::unordered_map<int, CUfunction> func_;
 
-  /*!
-   * \brief add supporting code to kernel.
-   */
-  std::string decorate(const std::string& name,
-                       std::vector<std::pair<std::string, TShape> > const& input,
-                       std::vector<std::pair<std::string, TShape> > const& output,
-                       const std::string kernel);
+//  /*!
+//   * \brief add supporting code to kernel.
+//   */
+//  std::string decorate(const std::string& name,
+//                       std::vector<std::pair<std::string, TShape> > const& input,
+//                       std::vector<std::pair<std::string, TShape> > const& output,
+//                       const std::string kernel);
   /*!
    * \brief compile the kernel with nvrtc.
    */
@@ -107,5 +103,5 @@ class Rtc {
 
 }  // namespace tinyflow
 
-#endif  // TINYFLOW_USE_CUDA && TINYFLOW_USE_NVRTC
+// #endif  // TINYFLOW_USE_CUDA && TINYFLOW_USE_NVRTC
 #endif  // TINYFLOW_RTC_H_

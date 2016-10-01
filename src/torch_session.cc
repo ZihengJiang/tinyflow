@@ -4,8 +4,9 @@
 
 #include <memory>
 #include <functional>
-#include "./torch_util.h"
 #include "./op_util.h"
+#include "./rtc.h"
+#include "./torch_util.h"
 
 namespace tinyflow {
 
@@ -16,6 +17,9 @@ using nnvm::ShapeVector;
 using nnvm::DTypeVector;
 using nnvm::StorageVector;
 
+using Kernel    = std::pair<std::string, std::string>;
+using KernelMap = std::unordered_map<uint32_t, Kernel>;
+using RtcMap    = std::unordered_map<uint32_t, Rtc>;
 
 class TorchExecutor;
 
@@ -53,6 +57,28 @@ using VarStateMap = std::unordered_map<std::string, std::shared_ptr<VarState> >;
 using FOpExec = std::function<void ()>;
 // take inputs & outputs, return compute closures
 using FRtcCompute = std::function<FOpExec (std::vector<LuaRef>, std::vector<LuaRef>)>;
+
+static FOpExec rtc_closure_generate(Rtc& rtc,
+                                    const std::vector<LuaRef>& in_array,
+                                    std::vector<LuaRef>& out_array) {
+  auto ret = [&]() {
+    auto* th = TorchState::ThreadLocalState();
+    std::vector<TBlob> input_tblob, output_tblob;
+    for (size_t i = 0; i < in_array.size(); ++i) {
+      input_tblob.push_back(th->GetTBlob(in_array[i]));
+    }
+    for (size_t i = 0; i < out_array.size(); ++i) {
+      output_tblob.push_back(th->GetTBlob(out_array[i]));
+    }
+
+    int num_elements = input_tblob[0].shape[0]; // TODO
+    rtc.Run(input_tblob, output_tblob, 1, 1, 1, num_elements, 1, 1);
+    for (size_t i = 0; i < out_array.size(); ++i) {
+      out_array[i] = th->NewTensorShared(output_tblob[i]);
+    }
+  };
+  return ret;
+}
 
 // torch session.
 class TorchSession : public Session {
@@ -98,6 +124,7 @@ class TorchExecutor {
   void Setup(const std::unordered_map<std::string, TBlob>& inputs);
   void SetupShapeDType(const std::unordered_map<std::string, TBlob>& inputs, bool* need_redo_infer);
   void SetupStorage();
+  void SetupRtc();
   void SetupOpExecs();
   // internal symbol and graph
   nnvm::Symbol symbol_;
@@ -106,6 +133,8 @@ class TorchExecutor {
   const ShapeVector* node_shape_{nullptr};
   // type vector in graph attribute
   const DTypeVector* node_dtype_{nullptr};
+  const KernelMap*   node_kernel_{nullptr};
+  std::shared_ptr<RtcMap> node_rtc_{nullptr};
   // ----------------------------
   // node auxiliary data structures
   // The device of this executor
@@ -263,6 +292,7 @@ TorchExecutor::Run(const std::unordered_map<std::string, TBlob>& inputs) {
 void TorchExecutor::Setup(const std::unordered_map<std::string, TBlob>& inputs) {
   bool need_redo_infer;
   SetupShapeDType(inputs, &need_redo_infer);
+  // SetupRtc();
   if (need_redo_infer) SetupStorage();
   if (need_redo_infer) {
     op_execs_.clear();
@@ -355,6 +385,16 @@ void TorchExecutor::SetupShapeDType(
   }
 }
 
+void TorchExecutor::SetupRtc() {
+  // graph_ = ApplyPasses(std::move(graph_), {'Fusion', 'CodeGen'});
+
+  node_kernel_ = &(graph_.GetAttr<KernelMap>("kernel"));
+  node_rtc_ = std::make_shared<RtcMap>();
+  for (auto kv = node_kernel_->cbegin(); kv != node_kernel_->cend(); ++kv) {
+    node_rtc_->insert(std::pair<uint32_t, Rtc>(kv->first, Rtc(kv->second.first, kv->second.second)));
+  }
+}
+
 void TorchExecutor::SetupStorage() {
   const auto& idx = graph_.indexed_graph();
   if (storage_pool_.size() == 0) {
@@ -421,8 +461,6 @@ void TorchExecutor::SetupOpExecs() {
       nnvm::Op::GetAttr<FLuaCreateNNModule>("FLuaCreateNNModule");
   const auto& lua_compute_code =
       nnvm::Op::GetAttr<FLuaCompute>("FLuaCompute");
-  const auto& rtc_compute =
-      nnvm::Op::GetAttr<FRtcCompute>("FRtcCompute");
   LuaRef lempty_tensor = lua->Eval(R"(
     return
     function(dev_mask)
@@ -585,8 +623,8 @@ void TorchExecutor::SetupOpExecs() {
       out_array.push_back(data_entry_[eid]);
     }
 
-    if (rtc_compute.count(inode.source->op())) {
-      op_execs_[nid] = rtc_compute[inode.source->op()](in_array, out_array);
+    if (node_rtc_ && node_rtc_->count(nid)) {
+      op_execs_[nid] = rtc_closure_generate(node_rtc_->at(nid), in_array, out_array);
     } else if (lua_compute_code.count(inode.source->op())) {
       // compute function
       std::string lua_str = "return " + lua_compute_code[inode.source->op()];

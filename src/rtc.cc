@@ -6,21 +6,15 @@
 #include <cuda_runtime.h>
 #include <iostream>
 #include "./rtc.h"
-#if true
 // #if ((TINYFLOW_USE_CUDA) && (TINYFLOW_USE_NVRTC))
 
 namespace tinyflow {
 const char Rtc::str_type[] = "float";
 std::unordered_map<std::string, char*> Rtc::kernel_registry;
 
-Rtc::Rtc(const std::string& name,
-         std::vector<std::pair<std::string, TShape> > const& input,
-         std::vector<std::pair<std::string, TShape> > const& output,
-         const std::string& kernel) {
+Rtc::Rtc(const std::string& name, const std::string& kernel) {
   name_ = name;
-  num_input_ = input.size();
-  num_output_ = output.size();
-  code_ = decorate(name, input, output, kernel);
+  code_ = kernel;
   if (Rtc::kernel_registry.find(code_) != Rtc::kernel_registry.end()) {
       ptx_ = Rtc::kernel_registry[code_];
   } else {
@@ -29,13 +23,13 @@ Rtc::Rtc(const std::string& name,
 }
 
 void Rtc::Run(std::vector<TBlob> const& input,
-                 std::vector<TBlob> const& output,
-                 unsigned int grid_dim_X,
-                 unsigned int grid_dim_Y,
-                 unsigned int grid_dim_Z,
-                 unsigned int block_dim_X,
-                 unsigned int block_dim_Y,
-                 unsigned int block_dim_Z) {
+              std::vector<TBlob> const& output,
+              unsigned int grid_dim_X,
+              unsigned int grid_dim_Y,
+              unsigned int grid_dim_Z,
+              unsigned int block_dim_X,
+              unsigned int block_dim_Y,
+              unsigned int block_dim_Z) {
     CHECK_EQ(num_input_, input.size());
     CHECK_EQ(num_output_, output.size());
     CHECK(output.size());
@@ -70,44 +64,44 @@ void Rtc::Run(std::vector<TBlob> const& input,
     CUDA_SAFE_CALL(cuCtxSynchronize());
 }
 
-std::string Rtc::decorate(const std::string& name,
-                         std::vector<std::pair<std::string, TShape> > const& input,
-                         std::vector<std::pair<std::string, TShape> > const& output,
-                         const std::string kernel) {
-    std::string source;
-    source = source + "\nextern \"C\" __global__ void " + name + "(";
-    for (auto &i : input) {
-        source = source + "const " + str_type + "* " + i.first + ",";
-    }
-    for (auto &i : output) {
-        source = source + str_type + "* " + i.first + ",";
-    }
-    source.pop_back();
-    source = source + ") {\n";
-    for (auto &i : input) {
-        source = source + "const int " + i.first + "_ndim = " +
-                  std::to_string(i.second.ndim()) + ";\n";
-        source = source + "const int " + i.first + "_dims[] = {";
-        for (index_t j = 0; j < i.second.ndim(); ++j) {
-            source = source + std::to_string(i.second[j]) + ",";
-        }
-        source.pop_back();
-        source = source + "};\n";
-    }
-    for (auto &i : output) {
-        source = source + "const int " + i.first + "_ndim = " +
-                  std::to_string(i.second.ndim()) + ";\n";
-        source = source + "const int " + i.first + "_dims[] = {";
-        for (index_t j = 0; j < i.second.ndim(); ++j) {
-            source = source + std::to_string(i.second[j]) + ",";
-        }
-        source.pop_back();
-        source = source + "};\n";
-    }
-    source = source + kernel + "\n}\n";
-    LOG(INFO) << source;
-    return source;
-}
+// std::string Rtc::decorate(const std::string& name,
+//                          std::vector<std::pair<std::string, TShape> > const& input,
+//                          std::vector<std::pair<std::string, TShape> > const& output,
+//                          const std::string kernel) {
+//     std::string source;
+//     source = source + "\nextern \"C\" __global__ void " + name + "(";
+//     for (auto &i : input) {
+//         source = source + "const " + str_type + "* " + i.first + ",";
+//     }
+//     for (auto &i : output) {
+//         source = source + str_type + "* " + i.first + ",";
+//     }
+//     source.pop_back();
+//     source = source + ") {\n";
+//     for (auto &i : input) {
+//         source = source + "const int " + i.first + "_ndim = " +
+//                   std::to_string(i.second.ndim()) + ";\n";
+//         source = source + "const int " + i.first + "_dims[] = {";
+//         for (index_t j = 0; j < i.second.ndim(); ++j) {
+//             source = source + std::to_string(i.second[j]) + ",";
+//         }
+//         source.pop_back();
+//         source = source + "};\n";
+//     }
+//     for (auto &i : output) {
+//         source = source + "const int " + i.first + "_ndim = " +
+//                   std::to_string(i.second.ndim()) + ";\n";
+//         source = source + "const int " + i.first + "_dims[] = {";
+//         for (index_t j = 0; j < i.second.ndim(); ++j) {
+//             source = source + std::to_string(i.second[j]) + ",";
+//         }
+//         source.pop_back();
+//         source = source + "};\n";
+//     }
+//     source = source + kernel + "\n}\n";
+//     LOG(INFO) << source;
+//     return source;
+// }
 
 char* Rtc::compile(const std::string& name, const std::string& code) {
     nvrtcProgram prog;
@@ -132,7 +126,6 @@ char* Rtc::compile(const std::string& name, const std::string& code) {
     LOG(INFO) << "RTC Compile Successfully";
     return ptx;
 }
-
 }  // namespace tinyflow
 
-#endif  // ((TINYFLOW_USE_CUDA) && (TINYFLOW_USE_NVRTC))
+// #endif  // ((TINYFLOW_USE_CUDA) && (TINYFLOW_USE_NVRTC))
