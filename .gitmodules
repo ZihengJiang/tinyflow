@@ -1,6 +1,7 @@
 [submodule "nnvm"]
 	path = nnvm
-	url = https://github.com/dmlc/nnvm
+	url = https://github.com/ZihengJiang/nnvm
+    branch = fusion
 [submodule "dmlc-core"]
 	path = dmlc-core
 	url = https://github.com/dmlc/dmlc-core

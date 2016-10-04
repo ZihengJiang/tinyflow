@@ -3,6 +3,7 @@
 #include <tinyflow/base.h>
 #include <dmlc/parameter.h>
 #include <nnvm/op_attr_types.h>
+#include <nnvm/exp.h>
 #include <utility>
 #include "./op_util.h"
 
@@ -131,6 +132,8 @@ NNVM_REGISTER_OP(__add_symbol__)
                     const std::vector<NodeEntry>& ograds){
       return std::vector<NodeEntry>{ograds[0], ograds[0]};
     })
+.set_attr<bool>("IsElementWise", true)
+.set_attr<nnvm::ExpPtr>("ExpPtr", nnvm::MakeBinaryExpPtr('+'))
 .set_attr<FLuaCompute>(
     "FLuaCompute", R"(
 function(x, y, kwarg)

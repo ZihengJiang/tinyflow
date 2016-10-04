@@ -55,26 +55,46 @@ struct VarState {
 using VarStateMap = std::unordered_map<std::string, std::shared_ptr<VarState> >;
 // operator executor closures
 using FOpExec = std::function<void ()>;
-// take inputs & outputs, return compute closures
-using FRtcCompute = std::function<FOpExec (std::vector<LuaRef>, std::vector<LuaRef>)>;
 
 static FOpExec rtc_closure_generate(Rtc& rtc,
-                                    const std::vector<LuaRef>& in_array,
-                                    std::vector<LuaRef>& out_array) {
-  auto ret = [&]() {
+                                    const std::vector<LuaRef> in_array,
+                                    std::vector<LuaRef> out_array) {
+  auto ret = [&rtc, in_array, out_array]() {
     auto* th = TorchState::ThreadLocalState();
     std::vector<TBlob> input_tblob, output_tblob;
+    CUdeviceptr in_dptr[in_array.size()], out_dptr[out_array.size()];
     for (size_t i = 0; i < in_array.size(); ++i) {
       input_tblob.push_back(th->GetTBlob(in_array[i]));
+      in_dptr[i] = reinterpret_cast<CUdeviceptr>(input_tblob[i].data);
+      input_tblob[i].data  = &in_dptr[i];
     }
     for (size_t i = 0; i < out_array.size(); ++i) {
       output_tblob.push_back(th->GetTBlob(out_array[i]));
+      out_dptr[i] = reinterpret_cast<CUdeviceptr>(output_tblob[i].data);
+      output_tblob[i].data = &out_dptr[i];
     }
+
+    // int N = x.shape[0];
+    // float* hx = new float[N];
+    // cuMemcpyDtoH(hx, in_dptr[0], N * sizeof(float));
+    // for (int i = 0; i < N; ++i) {
+    //   std::cout << hx[i] << " ";
+    // }
+    // std::cout << std::endl;
 
     int num_elements = input_tblob[0].shape[0]; // TODO
     rtc.Run(input_tblob, output_tblob, 1, 1, 1, num_elements, 1, 1);
+
+    // cuMemcpyDtoH(hx, out_dptr[0], N * sizeof(float));
+    // for (int i = 0; i < N; ++i) {
+    //   std::cout << hx[i] << " ";
+    // }
+    // std::cout << std::endl;
+
     for (size_t i = 0; i < out_array.size(); ++i) {
-      out_array[i] = th->NewTensorShared(output_tblob[i]);
+      output_tblob[i].data = reinterpret_cast<void*>(out_dptr[i]);
+      th->CopyFromTo(th->NewTensorShared(output_tblob[i]),
+                     out_array[i]);
     }
   };
   return ret;
@@ -87,6 +107,7 @@ class TorchSession : public Session {
   explicit TorchSession(const std::string& default_device) {
     if (default_device.find("gpu") != std::string::npos) {
       default_dev_mask_ = kGPU;
+    } else {
     }
   }
   const std::vector<TBlob>&
@@ -211,7 +232,12 @@ void TorchExecutor::Init(nnvm::Symbol symbol,
   dev_mask_ = default_dev_mask;
   if (dev_mask_ == kGPU) TorchState::ThreadLocalState()->InitGPU();
   graph_.outputs = symbol.outputs;
-  symbol_ = std::move(symbol);
+
+  graph_ = ApplyPasses(std::move(graph_), {"Fusion", "CodeGen"});
+  symbol_.outputs = graph_.outputs;
+  // LOG(INFO) << "After Fusion&CodeGen";
+  // symbol_.Print(std::cout);
+
   // initialize all node auxiliary data structures.
   const Op* assign_op = Op::Get("assign");
   const Op* placeholder_op = Op::Get("placeholder");
@@ -292,7 +318,7 @@ TorchExecutor::Run(const std::unordered_map<std::string, TBlob>& inputs) {
 void TorchExecutor::Setup(const std::unordered_map<std::string, TBlob>& inputs) {
   bool need_redo_infer;
   SetupShapeDType(inputs, &need_redo_infer);
-  // SetupRtc();
+  SetupRtc();
   if (need_redo_infer) SetupStorage();
   if (need_redo_infer) {
     op_execs_.clear();
@@ -386,11 +412,13 @@ void TorchExecutor::SetupShapeDType(
 }
 
 void TorchExecutor::SetupRtc() {
-  // graph_ = ApplyPasses(std::move(graph_), {'Fusion', 'CodeGen'});
-
   node_kernel_ = &(graph_.GetAttr<KernelMap>("kernel"));
   node_rtc_ = std::make_shared<RtcMap>();
   for (auto kv = node_kernel_->cbegin(); kv != node_kernel_->cend(); ++kv) {
+    // std::cout << "Node ID: " << kv->first << std::endl;
+    // std::cout << "Kernel Name: " << kv->second.first << std::endl;
+    // std::cout << "Kernel Content: " << std::endl
+    //           << kv->second.second << std::endl;
     node_rtc_->insert(std::pair<uint32_t, Rtc>(kv->first, Rtc(kv->second.first, kv->second.second)));
   }
 }

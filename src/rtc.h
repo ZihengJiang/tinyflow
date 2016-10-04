@@ -5,7 +5,6 @@
  */
 #ifndef TINYFLOW_RTC_H_
 #define TINYFLOW_RTC_H_
-// #if ((TINYFLOW_USE_CUDA) && (TINYFLOW_USE_NVRTC))
 #include <tinyflow/base.h>
 #include <nvrtc.h>
 #include <cuda.h>
@@ -103,5 +102,4 @@ class Rtc {
 
 }  // namespace tinyflow
 
-// #endif  // TINYFLOW_USE_CUDA && TINYFLOW_USE_NVRTC
 #endif  // TINYFLOW_RTC_H_

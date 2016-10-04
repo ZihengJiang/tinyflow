@@ -30,8 +30,8 @@ void Rtc::Run(std::vector<TBlob> const& input,
               unsigned int block_dim_X,
               unsigned int block_dim_Y,
               unsigned int block_dim_Z) {
-    CHECK_EQ(num_input_, input.size());
-    CHECK_EQ(num_output_, output.size());
+    // LOG(INFO) << "RTC: input_size = " << input.size();
+    // LOG(INFO) << "RTC: output_size = " << output.size();
     CHECK(output.size());
 
     CUdevice cuDevice;
@@ -57,6 +57,7 @@ void Rtc::Run(std::vector<TBlob> const& input,
     for (auto& i : input)  args.push_back(i.data);
     for (auto& i : output) args.push_back(i.data);
 
+    // LOG(INFO) << "Launch Kernel";
     CUDA_SAFE_CALL(cuLaunchKernel(func,
                                   grid_dim_X, grid_dim_Y, grid_dim_Z,
                                   block_dim_X, block_dim_Y, block_dim_Z,
@@ -123,7 +124,7 @@ char* Rtc::compile(const std::string& name, const std::string& code) {
     char *ptx = new char[ptx_size];
     NVRTC_SAFE_CALL(nvrtcGetPTX(prog, ptx));
     NVRTC_SAFE_CALL(nvrtcDestroyProgram(&prog));
-    LOG(INFO) << "RTC Compile Successfully";
+    // LOG(INFO) << "RTC Compile Successfully";
     return ptx;
 }
 }  // namespace tinyflow
