@@ -1,19 +1,40 @@
-# TinyFlow: Build Your Own DL System in 1.6K Lines
+# TinyFlow: Build Your Own DL System in 2K Lines
 
-TinyFlow is an example code for [NNVM](https://github.com/dmlc/nnvm/).
+TinyFlow is  "example code" for [NNVM](https://github.com/dmlc/nnvm/).
+
 It demonstrates how can we build a clean, minimum and powerful computational
 graph based deep learning system with same API as TensorFlow.
-The operator code are implemented with [Torch7](https://github.com/torch/torch7) to reduce the effort to write operators.
+The operator code are implemented with [Torch7](https://github.com/torch/torch7) to reduce the effort to write operators while still demonstrating the concepts of the system (and Embedding Lua in C++ is kinda of fun:).
 
 TinyFlow is a real deep learning system that can run on GPU and CPUs.
-To support [example/mnist_softmax.py](example/mnist_softmax.py), it takes
-- 679 lines code for operators
-- 671 lines of code for execution runtime
+To support the examples, it takes.
+- 927 lines code for operators
+- 734 lines of code for execution runtime
 - 71 lines of code for API glue
-- 190 lines of code for front-end
+- 233 lines of code for front-end
 
-Note that more code in operators can easily be added to make it as feature complete
-as most existing deep learning systems.
+Note that more code in operators can easily be added to make it as
+feature complete as most existing deep learning systems.
+
+## What is it for
+As explained in the goal of [NNVM](https://github.com/dmlc/nnvm/),
+it is important to make modular and reusable components for to enable us to build
+customized learning system easily.
+
+- Course Material for teaching DL system. TinyFlow can be used to teach student the concepts in deep learning systems.
+  - e.g. design homeworks on implementing symbolic differentiation, memory allocation, operator fusion.
+- Experiment bed for learning system researchers. TinyFlow allows easy addition with new system features with
+  the modular design being portable to other system that reuses NNVM.
+- Showcase of intermediate representation usecase. It demonstrates how intermediate representation like NNVM to be able to
+  target multiple front-ends(TF, MXNet) and backends(Torch7, MXNet) with common set of optimizations.
+- Test bed on common reusable modules for DL system. TinyFlow, together with other systems(e.g. MXNet) can be used as testbed on the
+  common reusable modules in deep learning to encourage front-end, optimization module and backends
+  that are shared across frameworks.
+- Just for fun :)
+
+
+We believe the Unix Philosophy can building learning system more fun and everyone can be able to build
+and understand learning system better.
 
 ## The Design
 - The graph construction API is automatically reused from NNVM
@@ -36,24 +57,9 @@ Most of TinyFlow's code is self-contained.
   - We use a lightweight lua bridge code from dmlc-core/dmlc/lua.h
 - NNVM is used for graph representation and optimizations
 
-## What is it for
-As explained in the goal of [NNVM](https://github.com/dmlc/nnvm/).
-It is important to make deep learning system modular and reusable and enable us to build new systems that suits our need.
-Here are the reasons why we created TinyFlow
-
-- TinyFlow can be a perfect material to teach new student the concepts of deep learning systems.
-  - e.g. design homeworks on implementing symbolic differentiation, memory allocation, operator fusion.
-- For learning system researchers, TinyFlow allows easy addition with new system features with
-  the modular design being portable to other system that reuses NNVM.
-- It demonstrates how intermediate representation like NNVM to be able to
-  target multiple front-ends(TF, MXNet) and backends(Torch7, MXNet) with common set of optimizations.
-
-We believe the Unix Philosophy can building learning system more fun and everyone can be able to build
-and understand learning system better.
-
 ## Build
 - Install Torch7
-- Set up environement variable ```TORCH_HOME``` to root of torch
+- Set up environment variable ```TORCH_HOME``` to root of torch
 - Type ```make```
 - Setup python path to include tinyflow and nnvm
 ```bash
