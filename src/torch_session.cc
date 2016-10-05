@@ -74,22 +74,13 @@ static FOpExec rtc_closure_generate(Rtc& rtc,
       output_tblob[i].data = &out_dptr[i];
     }
 
-    // int N = x.shape[0];
-    // float* hx = new float[N];
-    // cuMemcpyDtoH(hx, in_dptr[0], N * sizeof(float));
-    // for (int i = 0; i < N; ++i) {
-    //   std::cout << hx[i] << " ";
-    // }
-    // std::cout << std::endl;
+    int num_elements = 1;
+    for (auto it = input_tblob[0].shape.begin();
+              it != input_tblob[0].shape.end(); ++it) {
+        num_elements *= (*it);
+    }
 
-    int num_elements = input_tblob[0].shape[0]; // TODO
     rtc.Run(input_tblob, output_tblob, 1, 1, 1, num_elements, 1, 1);
-
-    // cuMemcpyDtoH(hx, out_dptr[0], N * sizeof(float));
-    // for (int i = 0; i < N; ++i) {
-    //   std::cout << hx[i] << " ";
-    // }
-    // std::cout << std::endl;
 
     for (size_t i = 0; i < out_array.size(); ++i) {
       output_tblob[i].data = reinterpret_cast<void*>(out_dptr[i]);
