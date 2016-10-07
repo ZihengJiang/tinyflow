@@ -3,7 +3,6 @@
 #include <tinyflow/base.h>
 #include <dmlc/parameter.h>
 #include <nnvm/op_attr_types.h>
-#include <nnvm/exp.h>
 #include <utility>
 #include "./op_util.h"
 
@@ -125,15 +124,14 @@ end
 NNVM_REGISTER_OP(__add_symbol__)
 .describe("add two data together")
 .set_num_inputs(2)
+.set_attr<bool>("IsElementWise", true)
 .set_attr<FInferShape>("FInferShape", SameShape)
 .set_attr<FInplaceOption>("FInplaceOption", InplaceIn0Out0)
 .set_attr<FGradient>(
     "FGradient", [](const NodePtr& n,
                     const std::vector<NodeEntry>& ograds){
       return std::vector<NodeEntry>{ograds[0], ograds[0]};
-    })
-.set_attr<bool>("IsElementWise", true)
-.set_attr<nnvm::ExpPtr>("ExpPtr", nnvm::MakeBinaryExpPtr('+'))
+})
 .set_attr<FLuaCompute>(
     "FLuaCompute", R"(
 function(x, y, kwarg)
@@ -141,7 +139,45 @@ function(x, y, kwarg)
     torch.add(y[1], x[1], x[2])
   end
 end
-)");
+)")
+.set_attr<FCodeGen>(
+    "FCodeGen", [](const NodePtr& n,
+                   const std::vector<std::string>& inputs) {
+      return std::vector<std::string>{
+        "(" + inputs[0] + ") + (" + inputs[1] + ")"};
+});
+
+
+NNVM_REGISTER_OP(__sub_symbol__)
+.describe("do subtract")
+.set_num_inputs(2)
+.set_attr<bool>("IsElementWise", true)
+.set_attr<FInferShape>("FInferShape", SameShape)
+.set_attr<FInplaceOption>("FInplaceOption", InplaceIn0Out0)
+.set_attr<FGradient>(
+    "FGradient", [](const NodePtr& n,
+                    const std::vector<NodeEntry>& ograds){
+      return std::vector<NodeEntry>{
+        MakeNode("__mul_scalar__", n->attrs.name + "_grad_0",
+                 {ograds[0]}, {{"scalar", "1"}}),
+        MakeNode("__mul_scalar__", n->attrs.name + "_grad_1",
+                 {ograds[0]}, {{"scalar", "-1"}}),
+      };
+})
+.set_attr<FLuaCompute>(
+    "FLuaCompute", R"(
+function(x, y, kwarg)
+  return function()
+    torch.sub(y[1], x[1], x[2])
+  end
+end
+)")
+.set_attr<FCodeGen>(
+    "FCodeGen", [](const NodePtr& n,
+                   const std::vector<std::string>& inputs) {
+      return std::vector<std::string>{
+        "(" + inputs[0] + ") - (" + inputs[1] + ")"};
+});
 
 
 NNVM_REGISTER_OP(mul)
@@ -150,14 +186,6 @@ NNVM_REGISTER_OP(mul)
 .set_num_inputs(2)
 .set_attr<FInferShape>("FInferShape", SameShape)
 .set_attr<FInplaceOption>("FInplaceOption", InplaceIn0Out0)
-.set_attr<FLuaCompute>(
-    "FLuaCompute", R"(
-function(x, y, kwarg)
-  return function()
-    torch.cmul(y[1], x[1], x[2])
-  end
-end
-)")
 .set_attr<FGradient>(
     "FGradient", [](const NodePtr& n,
                     const std::vector<NodeEntry>& ograds){
@@ -166,16 +194,45 @@ end
                  {ograds[0], n->inputs[1]}),
         MakeNode("mul", n->attrs.name + "_grad_1",
                  {ograds[0], n->inputs[0]})
-            };
-    });
+      };
+})
+.set_attr<FLuaCompute>(
+    "FLuaCompute", R"(
+function(x, y, kwarg)
+  return function()
+    torch.cmul(y[1], x[1], x[2])
+  end
+end
+)")
+.set_attr<FCodeGen>(
+    "FCodeGen", [](const NodePtr& n,
+                   const std::vector<std::string>& inputs) {
+      return std::vector<std::string>{
+        "(" + inputs[0] + ") * (" + inputs[1] + ")"};
+});
 
 
 NNVM_REGISTER_OP(div)
 .add_alias("__div_symbol__")
 .describe("do division")
 .set_num_inputs(2)
+.set_attr<bool>("IsElementWise", true)
 .set_attr<FInferShape>("FInferShape", SameShape)
 .set_attr<FInplaceOption>("FInplaceOption", InplaceIn0Out0)
+.set_attr<FGradient>(
+    "FGradient", [](const NodePtr& n,
+                    const std::vector<NodeEntry>& ograds){
+      NodeEntry n1 = MakeNode("mul", n->attrs.name + "_grad_sub_0",
+                              {ograds[0], n->inputs[0]});
+      NodeEntry n2 = MakeNode("mul", n->attrs.name + "_grad_sub_1",
+                              {n->inputs[1], n->inputs[1]});
+      return std::vector<NodeEntry>{
+        MakeNode("__div_symbol__", n->attrs.name + "_grad_0",
+                 {ograds[0], n->inputs[1]}),
+        MakeNode("__div_symbol__", n->attrs.name + "_grad_1",
+                 {n1, n2})
+      };
+})
 .set_attr<FLuaCompute>(
     "FLuaCompute", R"(
 function(x, y, kwarg)
@@ -183,14 +240,29 @@ function(x, y, kwarg)
     torch.cdiv(y[1], x[1], x[2])
   end
 end
-)");
+)")
+.set_attr<FCodeGen>(
+    "FCodeGen", [](const NodePtr& n,
+                   const std::vector<std::string>& inputs) {
+      return std::vector<std::string>{
+        "(" + inputs[0] + ") / (" + inputs[1] + ")"};
+});
 
 
 NNVM_REGISTER_OP(__mul_scalar__)
 .describe("Multiply symbol with scalar")
 .set_num_inputs(1)
+.set_attr<bool>("IsElementWise", true)
 .set_attr<FInferShape>("FInferShape", SameShape)
 .set_attr<FInplaceOption>("FInplaceOption", InplaceIn0Out0)
+.set_attr<FGradient>(
+    "FGradient", [](const NodePtr& n,
+                    const std::vector<NodeEntry>& ograds){
+      return std::vector<NodeEntry>{
+        MakeNode("__mul_scalar__", n->attrs.name + "_grad_0",
+                 {ograds[0]}, {{"scalar", n->attrs.dict["scalar"]}}),
+      };
+})
 .set_attr<FLuaCompute>(
     "FLuaCompute", R"(
 function(x, y, kwarg)
@@ -200,14 +272,42 @@ function(x, y, kwarg)
   end
 end
 )")
+.set_attr<FCodeGen>(
+    "FCodeGen", [](const NodePtr& n,
+                   const std::vector<std::string>& inputs) {
+      return std::vector<std::string>{
+        "(" + n->attrs.dict["scalar"] + ") * (" + inputs[0] + ")"};
+});
+
+
+NNVM_REGISTER_OP(exp)
+.describe("take elemtnwise exponation")
+.set_num_inputs(1)
+.set_attr<bool>("IsElementWise", true)
+.set_attr<FInferShape>("FInferShape", SameShape)
+.set_attr<FInplaceOption>("FInplaceOption", InplaceIn0Out0)
 .set_attr<FGradient>(
     "FGradient", [](const NodePtr& n,
-                    const std::vector<NodeEntry>& ograds){
+                    const std::vector<NodeEntry>& ograds) {
       return std::vector<NodeEntry>{
-        MakeNode("__mul_scalar__", n->attrs.name + "_grad_0",
-                 {ograds[0]}, {{"scalar", n->attrs.dict["scalar"]}}),
-            };
-    });
+        MakeNode("__mul_symbol__", n->attrs.name + "_grad_0",
+                 {ograds[0], n->inputs[0]})
+      };
+})
+.set_attr<FLuaCompute>(
+    "FLuaCompute", R"(
+function(x, y, kwarg)
+  return function()
+    torch.exp(y[1], x[1])
+  end
+end
+)")
+.set_attr<FCodeGen>(
+    "FCodeGen", [](const NodePtr& n,
+                   const std::vector<std::string>& inputs) {
+      return std::vector<std::string>{
+        "exp(" + inputs[0] + ")"};
+});
 
 
 NNVM_REGISTER_OP(log)
@@ -215,14 +315,6 @@ NNVM_REGISTER_OP(log)
 .set_num_inputs(1)
 .set_attr<FInferShape>("FInferShape", SameShape)
 .set_attr<FInplaceOption>("FInplaceOption", InplaceIn0Out0)
-.set_attr<FLuaCompute>(
-    "FLuaCompute", R"(
-function(x, y, kwarg)
-  return function()
-    torch.log(y[1], x[1])
-  end
-end
-)")
 .set_attr<FGradient>(
     "FGradient", [](const NodePtr& n,
                     const std::vector<NodeEntry>& ograds) {
@@ -230,7 +322,15 @@ end
         MakeNode("__div_symbol__", n->attrs.name + "_grad_0",
                  {ograds[0], n->inputs[0]})
       };
-    });
+})
+.set_attr<FLuaCompute>(
+    "FLuaCompute", R"(
+function(x, y, kwarg)
+  return function()
+    torch.log(y[1], x[1])
+  end
+end
+)");
 
 
 NNVM_REGISTER_OP(matmul)

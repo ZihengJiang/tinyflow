@@ -81,6 +81,7 @@ static FOpExec rtc_closure_generate(Rtc& rtc,
     }
 
     rtc.Run(input_tblob, output_tblob, 1, 1, 1, num_elements, 1, 1);
+    LOG(INFO) << "Run Successfully. num_elements: " << num_elements;
 
     for (size_t i = 0; i < out_array.size(); ++i) {
       output_tblob[i].data = reinterpret_cast<void*>(out_dptr[i]);
