@@ -16,53 +16,73 @@ Rtc::Rtc(const std::string& name, const std::string& kernel) {
   name_ = name;
   code_ = kernel;
   if (Rtc::kernel_registry.find(code_) != Rtc::kernel_registry.end()) {
-      ptx_ = Rtc::kernel_registry[code_];
+    ptx_ = Rtc::kernel_registry[code_];
   } else {
-      ptx_ = compile(name, code_);
+    ptx_ = compile(name, code_);
   }
+}
+
+
+void Rtc::Run(std::vector<TBlob> const& input,
+              std::vector<TBlob> const& output,
+              uint32_t num_elements) {
+    const int kBaseThreadBits = 8;
+    const int kBaseThreadNum  = 1 << kBaseThreadBits;
+    const int kMaxGridNum     = 65535;
+    const int kBaseGridNum    = 1024;
+
+    int num_block = (num_elements + kBaseThreadNum - 1) / kBaseThreadNum;
+    if (num_block < kMaxGridNum) {
+      return Run(input, output, num_elements, num_block, 1, 1, kBaseThreadNum, 1, 1);
+    } else {
+      // TODO(ziheng) for large kernel, repeat call kernel
+      // int repeat = (num_block + kBaseGridNum - 1) / kBaseGridNum;
+    }
 }
 
 void Rtc::Run(std::vector<TBlob> const& input,
               std::vector<TBlob> const& output,
-              unsigned int grid_dim_X,
-              unsigned int grid_dim_Y,
-              unsigned int grid_dim_Z,
-              unsigned int block_dim_X,
-              unsigned int block_dim_Y,
-              unsigned int block_dim_Z) {
-    // LOG(INFO) << "RTC: input_size = " << input.size();
-    // LOG(INFO) << "RTC: output_size = " << output.size();
-    CHECK(output.size());
+              uint32_t num_elements,
+              uint32_t grid_dim_X,
+              uint32_t grid_dim_Y,
+              uint32_t grid_dim_Z,
+              uint32_t block_dim_X,
+              uint32_t block_dim_Y,
+              uint32_t block_dim_Z) {
+  // LOG(INFO) << "RTC: input_size = " << input.size();
+  // LOG(INFO) << "RTC: output_size = " << output.size();
+  CHECK(output.size());
 
-    CUdevice cuDevice;
-    CUcontext context;
-    CUDA_SAFE_CALL(cuInit(0));
-    CUDA_SAFE_CALL(cuDeviceGet(&cuDevice, 0));
-    CUDA_SAFE_CALL(cuCtxCreate(&context, 0, cuDevice));
+  CUdevice cuDevice;
+  CUcontext context;
+  CUDA_SAFE_CALL(cuInit(0));
+  CUDA_SAFE_CALL(cuDeviceGet(&cuDevice, 0));
+  CUDA_SAFE_CALL(cuCtxCreate(&context, 0, cuDevice));
 
-    CUfunction func;
-    // TODO (ziheng) dev_id, stream
-    int dev_id = 0;
-    if (func_.find(dev_id) != func_.end()) {
-        func = func_[dev_id];
-    } else {
-        CUmodule module;
-        CUDA_SAFE_CALL(cuModuleLoadDataEx(&module, ptx_, 0, 0, 0));
-        CUDA_SAFE_CALL(cuModuleGetFunction(&func, module, name_.c_str()));
-        module_[dev_id] = module;
-        func_[dev_id] = func;
-    }
+  CUfunction func;
+  // TODO (ziheng) dev_id, stream
+  int dev_id = 0;
+  if (func_.find(dev_id) != func_.end()) {
+      func = func_[dev_id];
+  } else {
+    CUmodule module;
+    CUDA_SAFE_CALL(cuModuleLoadDataEx(&module, ptx_, 0, 0, 0));
+    CUDA_SAFE_CALL(cuModuleGetFunction(&func, module, name_.c_str()));
+    module_[dev_id] = module;
+    func_[dev_id] = func;
+  }
 
-    std::vector<void*> args;
-    for (auto& i : input)  args.push_back(i.data);
-    for (auto& i : output) args.push_back(i.data);
+  std::vector<void*> args;
+  for (auto& i : input)  args.push_back(i.data);
+  for (auto& i : output) args.push_back(i.data);
+  args.push_back(&num_elements);
 
-    // LOG(INFO) << "Launch Kernel";
-    CUDA_SAFE_CALL(cuLaunchKernel(func,
-                                  grid_dim_X, grid_dim_Y, grid_dim_Z,
-                                  block_dim_X, block_dim_Y, block_dim_Z,
-                                  0, NULL, args.data(), 0));
-    CUDA_SAFE_CALL(cuCtxSynchronize());
+  // LOG(INFO) << "Launch Kernel";
+  CUDA_SAFE_CALL(cuLaunchKernel(func,
+                                grid_dim_X, grid_dim_Y, grid_dim_Z,
+                                block_dim_X, block_dim_Y, block_dim_Z,
+                                0, NULL, args.data(), 0));
+  CUDA_SAFE_CALL(cuCtxSynchronize());
 }
 
 // std::string Rtc::decorate(const std::string& name,

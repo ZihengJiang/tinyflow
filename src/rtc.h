@@ -57,6 +57,15 @@ class Rtc {
    */
   Rtc(const std::string& name, const std::string& kernel);
   /*!
+   * \brief launch a kernel for flat tensor with the engine.
+   * \param input list of input ndarray.
+   * \param output list of output ndarray.
+   * \param num_elements number of elements.
+   */
+  void Run(std::vector<TBlob> const& input,
+           std::vector<TBlob> const& output,
+           uint32_t num_elements);
+  /*!
    * \brief launch a kernel with the engine.
    * \param input list of input ndarray.
    * \param output list of output ndarray.
@@ -69,12 +78,13 @@ class Rtc {
    */
   void Run(std::vector<TBlob> const& input,
            std::vector<TBlob> const& output,
-           unsigned int  grid_dim_X,
-           unsigned int  grid_dim_Y,
-           unsigned int  grid_dim_Z,
-           unsigned int  block_dim_X,
-           unsigned int  block_dim_Y,
-           unsigned int  block_dim_Z);
+           uint32_t num_elements,
+           uint32_t grid_dim_X,
+           uint32_t grid_dim_Y,
+           uint32_t grid_dim_Z,
+           uint32_t block_dim_X,
+           uint32_t block_dim_Y,
+           uint32_t block_dim_Z);
 
  private:
   static const char str_type[];
