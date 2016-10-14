@@ -3,33 +3,33 @@
  * \file rtc.cc
  * \brief Wrapper for NVRTC
  */
+#include <nnvm-rtc/rtc.h>
 #include <cuda_runtime.h>
 #include <iostream>
-#include "./rtc.h"
-// #if ((TINYFLOW_USE_CUDA) && (TINYFLOW_USE_NVRTC))
 
-namespace tinyflow {
-const char Rtc::str_type[] = "float";
-std::unordered_map<std::string, char*> Rtc::kernel_registry;
+namespace nnvm {
+namespace rtc {
+const char RTC::str_type[] = "float";
+std::unordered_map<std::string, char*> RTC::kernel_registry;
 
-Rtc::Rtc(const std::string& name, const std::string& kernel) {
+RTC::RTC(const std::string& name, const std::string& kernel) {
   name_ = name;
   code_ = kernel;
-  if (Rtc::kernel_registry.find(code_) != Rtc::kernel_registry.end()) {
-    ptx_ = Rtc::kernel_registry[code_];
+  if (RTC::kernel_registry.find(code_) != RTC::kernel_registry.end()) {
+    ptx_ = RTC::kernel_registry[code_];
   } else {
     ptx_ = compile(name, code_);
   }
 }
 
 
-void Rtc::Run(std::vector<TBlob> const& input,
-              std::vector<TBlob> const& output,
+void RTC::Run(std::vector<void*> const& input,
+              std::vector<void*> const& output,
               uint32_t num_elements) {
     const int kBaseThreadBits = 8;
     const int kBaseThreadNum  = 1 << kBaseThreadBits;
     const int kMaxGridNum     = 65535;
-    const int kBaseGridNum    = 1024;
+    // const int kBaseGridNum    = 1024;
 
     int num_block = (num_elements + kBaseThreadNum - 1) / kBaseThreadNum;
     if (num_block < kMaxGridNum) {
@@ -40,8 +40,8 @@ void Rtc::Run(std::vector<TBlob> const& input,
     }
 }
 
-void Rtc::Run(std::vector<TBlob> const& input,
-              std::vector<TBlob> const& output,
+void RTC::Run(std::vector<void*> const& input,
+              std::vector<void*> const& output,
               uint32_t num_elements,
               uint32_t grid_dim_X,
               uint32_t grid_dim_Y,
@@ -73,8 +73,8 @@ void Rtc::Run(std::vector<TBlob> const& input,
   }
 
   std::vector<void*> args;
-  for (auto& i : input)  args.push_back(i.data);
-  for (auto& i : output) args.push_back(i.data);
+  for (auto& i : input)  args.push_back(i);
+  for (auto& i : output) args.push_back(i);
   args.push_back(&num_elements);
 
   // LOG(INFO) << "Launch Kernel";
@@ -85,7 +85,7 @@ void Rtc::Run(std::vector<TBlob> const& input,
   CUDA_SAFE_CALL(cuCtxSynchronize());
 }
 
-// std::string Rtc::decorate(const std::string& name,
+// std::string RTC::decorate(const std::string& name,
 //                          std::vector<std::pair<std::string, TShape> > const& input,
 //                          std::vector<std::pair<std::string, TShape> > const& output,
 //                          const std::string kernel) {
@@ -124,7 +124,7 @@ void Rtc::Run(std::vector<TBlob> const& input,
 //     return source;
 // }
 
-char* Rtc::compile(const std::string& name, const std::string& code) {
+char* RTC::compile(const std::string& name, const std::string& code) {
     nvrtcProgram prog;
     NVRTC_SAFE_CALL(nvrtcCreateProgram(&prog,
                                        code.c_str(),
@@ -147,6 +147,5 @@ char* Rtc::compile(const std::string& name, const std::string& code) {
     // LOG(INFO) << "RTC Compile Successfully";
     return ptx;
 }
-}  // namespace tinyflow
-
-// #endif  // ((TINYFLOW_USE_CUDA) && (TINYFLOW_USE_NVRTC))
+}  // namespace rtc
+}  // namespace nnvm

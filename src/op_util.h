@@ -134,10 +134,6 @@ struct NNBackwardParam {
   bool need_outputs{true};
 };
 
-NNVM_REGISTER_OP_GROUP(ElementwiseOpAttr)
-.set_attr<bool>("IsElementWise", true)
-.set_attr<FInferShape>("FInferShape", SameShape);
-
 }  // namespace tinyflow
 
 #endif  // TINYFLOW_OP_UTIL_H_

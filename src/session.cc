@@ -1,12 +1,14 @@
 // Copyright (c) 2016 by Contributors
 #include <tinyflow/base.h>
 #include <nnvm/pass_functions.h>
-
+#include <nnvm-rtc/base.h>
+#include <nnvm-rtc/rtc.h>
 #include <memory>
 #include <functional>
 #include "./op_util.h"
-#include "./rtc.h"
-#include "./torch_util.h"
+#include "./torch/torch_util.h"
+
+#include <cuda_runtime.h> // cudaPointerAttributes
 
 namespace tinyflow {
 
@@ -16,10 +18,11 @@ using nnvm::IndexedGraph;
 using nnvm::ShapeVector;
 using nnvm::DTypeVector;
 using nnvm::StorageVector;
+using nnvm::rtc::Kernel;
+using nnvm::rtc::RTC;
 
-using Kernel    = std::pair<std::string, std::string>;
-using KernelMap = std::unordered_map<uint32_t, Kernel>;
-using RtcMap    = std::unordered_map<uint32_t, Rtc>;
+using RTCMap     = std::unordered_map<uint32_t, RTC>;
+using KernelMap  = std::unordered_map<uint32_t, Kernel>;
 
 class TorchExecutor;
 
@@ -51,29 +54,75 @@ struct VarState {
   }
 };
 
+static void PrintTBlobs(const std::vector<TBlob>& tblobs) {
+  for (uint32_t i = 0; i < tblobs.size(); ++i) {
+    std::cout << "tblob.data: " << reinterpret_cast<uint64_t>(tblobs[i].data) << " ";
+    if (tblobs[i].data) {
+      cudaPointerAttributes attr;
+      CUDA_RUNTIME_SAFE_CALL(cudaPointerGetAttributes(&attr, tblobs[i].data));
+      switch (attr.memoryType) {
+         case cudaMemoryTypeHost:
+             std::cout << "cudaMemoryTypeHost";
+            break;
+         case cudaMemoryTypeDevice:
+            std::cout << "cudaMemoryTypeDevice";
+            break;
+      }
+      std::cout << std::endl;
+    }
+  }
+  for (uint32_t i = 0; i < tblobs.size(); ++i) {
+    int num_elements = 1;
+    for (auto it = tblobs[i].shape.begin();
+              it != tblobs[i].shape.end(); ++it) {
+        num_elements *= (*it);
+    }
+
+    float *hp = new float[num_elements];
+    std::cout << tblobs[i].shape << " ";
+    CUdeviceptr dp = reinterpret_cast<CUdeviceptr>(tblobs[i].data);
+    cuMemcpyDtoH(hp, dp, sizeof(float) * num_elements);
+    for (int i = 0; i < (num_elements > 10 ? 10 : num_elements); ++i) {
+      std::cout << hp[i] << " ";
+    }
+    std::cout << std::endl;
+    delete[] hp;
+  }
+}
+
 // shared variable map structure
 using VarStateMap = std::unordered_map<std::string, std::shared_ptr<VarState> >;
 // operator executor closures
 using FOpExec = std::function<void()>;
 
-static FOpExec rtc_closure_generate(Rtc& rtc,
-                                    const std::vector<LuaRef> in_array,
-                                    std::vector<LuaRef> out_array) {
-  auto ret = [&rtc, in_array, out_array]() {
+static FOpExec rtc_closure_generate(RTC& rtc,
+                                    const std::vector<LuaRef>& input_luaref,
+                                    std::vector<LuaRef>& output_luaref) {
+  auto ret = [&rtc, input_luaref, output_luaref]() {
+    LOG(INFO) << "Execution";
     auto* th = TorchState::ThreadLocalState();
     std::vector<TBlob> input_tblobs, output_tblobs;
-    CUdeviceptr in_dptr[in_array.size()], out_dptr[out_array.size()];
+    CUdeviceptr input_dptr[input_luaref.size()], output_dptr[output_luaref.size()];
+    std::vector<void*> input, output;
 
-    for (size_t i = 0; i < in_array.size(); ++i) {
-      input_tblobs.push_back(th->GetTBlob(in_array[i]));
-      in_dptr[i] = reinterpret_cast<CUdeviceptr>(input_tblobs[i].data);
-      input_tblobs[i].data  = &in_dptr[i];
+    for (size_t i = 0; i < input_luaref.size(); ++i) {
+      input_tblobs.push_back(th->GetTBlob(input_luaref[i]));
     }
-    std::cout << std::endl;
-    for (size_t i = 0; i < out_array.size(); ++i) {
-      output_tblobs.push_back(th->GetTBlob(out_array[i]));
-      out_dptr[i] = reinterpret_cast<CUdeviceptr>(output_tblobs[i].data);
-      output_tblobs[i].data = &out_dptr[i];
+    LOG(INFO) << "Input TBlobs:";
+    PrintTBlobs(input_tblobs);
+    for (size_t i = 0; i < input_luaref.size(); ++i) {
+      input_dptr[i] = reinterpret_cast<CUdeviceptr>(input_tblobs[i].data);
+      input.push_back(&input_dptr[i]);
+    }
+
+    for (size_t i = 0; i < output_luaref.size(); ++i) {
+      output_tblobs.push_back(th->GetTBlob(output_luaref[i]));
+    }
+    LOG(INFO) << "Output TBlobs:";
+    PrintTBlobs(output_tblobs);
+    for (size_t i = 0; i < output_luaref.size(); ++i) {
+      output_dptr[i] = reinterpret_cast<CUdeviceptr>(output_tblobs[i].data);
+      output.push_back(&output_dptr[i]);
     }
 
     int num_elements = 1;
@@ -82,14 +131,8 @@ static FOpExec rtc_closure_generate(Rtc& rtc,
         num_elements *= (*it);
     }
 
-    rtc.Run(input_tblobs, output_tblobs, num_elements);
+    rtc.Run(input, output, num_elements);
     LOG(INFO) << "Run Successfully. num_elements: " << num_elements;
-
-    for (size_t i = 0; i < out_array.size(); ++i) {
-      output_tblobs[i].data = reinterpret_cast<void*>(out_dptr[i]);
-      th->CopyFromTo(th->NewTensorShared(output_tblobs[i]),
-                     out_array[i]);
-    }
   };
   return ret;
 }
@@ -142,7 +185,7 @@ class TorchExecutor {
   void Setup(const std::unordered_map<std::string, TBlob>& inputs);
   void SetupShapeDType(const std::unordered_map<std::string, TBlob>& inputs, bool* need_redo_infer);
   void SetupStorage();
-  void SetupRtc();
+  void SetupRTC();
   void SetupOpExecs();
   // internal symbol and graph
   nnvm::Symbol symbol_;
@@ -152,7 +195,7 @@ class TorchExecutor {
   // type vector in graph attribute
   const DTypeVector* node_dtype_{nullptr};
   const KernelMap*   node_kernel_{nullptr};
-  std::shared_ptr<RtcMap> node_rtc_{nullptr};
+  std::shared_ptr<RTCMap> node_rtc_{nullptr};
   // ----------------------------
   // node auxiliary data structures
   // The device of this executor
@@ -299,7 +342,61 @@ TorchExecutor::Run(const std::unordered_map<std::string, TBlob>& inputs) {
       try {
         // if (!op_execs_[i].is_nil()) op_execs_[i]();
         if (op_execs_[i]) {
+          LOG(INFO) << "Prepare for run op_execs_[" << i << "]";
+          const auto& inode = idx[i];
+          LOG(INFO) << "Get Inode[" << i << "]: " << inode.source->attrs.name;
+
+          std::vector<LuaRef> in_array;
+          std::vector<TBlob>  input_tblobs;
+          for (const auto& e : inode.inputs) {
+            LOG(INFO) << "Get Input Item: " << idx[e.node_id].source->attrs.name;
+            LuaRef item = data_entry_[idx.entry_id(e)];
+            in_array.push_back(item);
+            input_tblobs.push_back(th->GetTBlob(item));
+          }
+          std::vector<LuaRef> out_array;
+          std::vector<TBlob>  output_tblobs;
+          for (uint32_t index = 0; index < inode.source->num_outputs(); ++index) {
+            uint32_t eid = idx.entry_id(i, index);
+            if (idx[eid].source) {
+                LOG(INFO) << "Get Output Item: " << idx[eid].source->attrs.name;
+            }
+            LuaRef item = data_entry_[eid];
+            out_array.push_back(item);
+            output_tblobs.push_back(th->GetTBlob(item));
+          }
+
+          // for (int i = 0; i < inode.inputs.size(); ++i) {
+          //   std::cout << input_tblobs[i].shape << " ";
+          //   CUdeviceptr dp = reinterpret_cast<CUdeviceptr>(input_tblobs[i].data);
+          //   cuMemcpyDtoH(hp, dp, sizeof(float) * num_elements);
+          //   for (int i = 0; i < (num_elements > 10 ? 10 : num_elements); ++i) {
+          //     std::cout << hp[i] << " ";
+          //   }
+          //   std::cout << std::endl;
+          // }
+
+          LOG(INFO) << "before run exec";
+          LOG(INFO) << "Input TBlobs:";
+          PrintTBlobs(input_tblobs);
+          LOG(INFO) << "Output TBlobs:";
+          PrintTBlobs(output_tblobs);
           op_execs_[i]();
+          LOG(INFO) << "after run exec";
+          LOG(INFO) << "Input TBlobs:";
+          PrintTBlobs(input_tblobs);
+          LOG(INFO) << "Output TBlobs:";
+          PrintTBlobs(output_tblobs);
+
+          // for (int i = 0; i < inode.inputs.size(); ++i) {
+          //   std::cout << input_tblobs[i].shape << " ";
+          //   CUdeviceptr dp = reinterpret_cast<CUdeviceptr>(input_tblobs[i].data);
+          //   cuMemcpyDtoH(hp, dp, sizeof(float) * num_elements);
+          //   for (int i = 0; i < (num_elements > 10 ? 10 : num_elements); ++i) {
+          //     std::cout << hp[i] << " ";
+          //   }
+          //   std::cout << std::endl;
+          // }
         }
       } catch (dmlc::Error e) {
         LOG(INFO) << "error catched in op " << idx[i].source->op()->name;
@@ -325,7 +422,7 @@ void TorchExecutor::Setup(const std::unordered_map<std::string, TBlob>& inputs) 
   bool need_redo_infer;
   SetupShapeDType(inputs, &need_redo_infer);
   if (enable_fusion_)
-    SetupRtc();
+    SetupRTC();
   if (need_redo_infer) SetupStorage();
   if (need_redo_infer) {
     op_execs_.clear();
@@ -418,15 +515,15 @@ void TorchExecutor::SetupShapeDType(
   }
 }
 
-void TorchExecutor::SetupRtc() {
+void TorchExecutor::SetupRTC() {
   node_kernel_ = &(graph_.GetAttr<KernelMap>("kernel"));
-  node_rtc_ = std::make_shared<RtcMap>();
+  node_rtc_ = std::make_shared<RTCMap>();
   for (auto kv = node_kernel_->cbegin(); kv != node_kernel_->cend(); ++kv) {
     // std::cout << "Node ID: " << kv->first << std::endl;
     // std::cout << "Kernel Name: " << kv->second.first << std::endl;
     // std::cout << "Kernel Content: " << std::endl
     //           << kv->second.second << std::endl;
-    node_rtc_->insert(std::pair<uint32_t, Rtc>(kv->first, Rtc(kv->second.first, kv->second.second)));
+    node_rtc_->insert(std::pair<uint32_t, RTC>(kv->first, RTC(kv->second.first, kv->second.second)));
   }
 }
 

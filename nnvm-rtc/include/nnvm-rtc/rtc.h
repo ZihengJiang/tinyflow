@@ -3,17 +3,17 @@
  * \file rtc.h
  * \brief Wrapper for NVRTC
  */
-#ifndef TINYFLOW_RTC_H_
-#define TINYFLOW_RTC_H_
-#include <tinyflow/base.h>
-#include <nvrtc.h>
+#ifndef NNVM_RTC_RTC_H_
+#define NNVM_RTC_RTC_H_
+#include <dmlc/base.h>
+#include <dmlc/logging.h>
 #include <cuda.h>
-
+#include <nvrtc.h>
+#include <unordered_map>
 #include <vector>
 #include <string>
 #include <memory>
 #include <utility>
-#include <unordered_map>
 
 #define CUDA_SAFE_CALL(x)                                               \
   {                                                                     \
@@ -23,6 +23,16 @@
       cuGetErrorName(result, &msg);                                     \
       dmlc::LogMessageFatal(__FILE__, __LINE__).stream()                \
           << "CudaError: " #x " failed with error: " << msg;            \
+    }                                                                   \
+  }
+
+#define CUDA_RUNTIME_SAFE_CALL(x)                                       \
+  {                                                                     \
+    cudaError_t result = x;                                             \
+    if (result != cudaSuccess) {                                        \
+      dmlc::LogMessageFatal(__FILE__, __LINE__).stream()                \
+          << "CudaError: " #x " failed with error: "                    \
+          << cudaGetErrorString(result);                                \
     }                                                                   \
   }
 
@@ -36,14 +46,15 @@
     }                                                                   \
   }
 
-namespace tinyflow {
+namespace nnvm {
+namespace rtc {
 
 typedef unsigned index_t;
 
 /*!
  * \brief Runtime compile of cuda kernel code with NVRTC
  */
-class Rtc {
+class RTC {
  public:
   /*!
    * \brief Build a new kernel.
@@ -55,15 +66,15 @@ class Rtc {
    * \param output list of output ndarrays and their name.
    * \param kernel cuda code.
    */
-  Rtc(const std::string& name, const std::string& kernel);
+  RTC(const std::string& name, const std::string& kernel);
   /*!
    * \brief launch a kernel for flat tensor with the engine.
    * \param input list of input ndarray.
    * \param output list of output ndarray.
    * \param num_elements number of elements.
    */
-  void Run(std::vector<TBlob> const& input,
-           std::vector<TBlob> const& output,
+  void Run(std::vector<void*> const& input,
+           std::vector<void*> const& output,
            uint32_t num_elements);
   /*!
    * \brief launch a kernel with the engine.
@@ -76,8 +87,8 @@ class Rtc {
    * \param block_dim_Y kernel block dimensions.
    * \param block_dim_Z kernel block dimensions.
    */
-  void Run(std::vector<TBlob> const& input,
-           std::vector<TBlob> const& output,
+  void Run(std::vector<void*> const& input,
+           std::vector<void*> const& output,
            uint32_t num_elements,
            uint32_t grid_dim_X,
            uint32_t grid_dim_Y,
@@ -110,6 +121,7 @@ class Rtc {
   char* compile(const std::string& name, const std::string& code);
 };
 
-}  // namespace tinyflow
+}  // namespace rtc
+}  // namespace nnvm
 
-#endif  // TINYFLOW_RTC_H_
+#endif  // NNVM_RTC_RTC_H_
