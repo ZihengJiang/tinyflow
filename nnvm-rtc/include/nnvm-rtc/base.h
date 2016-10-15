@@ -1,7 +1,7 @@
 /*!
  *  Copyright (c) 2016 by Contributors
  * \file base.h
- * \brief TODO
+ * \brief defines basic types
  */
 #ifndef NNVM_RTC_BASE_H_
 #define NNVM_RTC_BASE_H_

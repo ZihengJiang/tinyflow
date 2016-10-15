@@ -3,20 +3,20 @@ TORCH_PATH=${TORCH_HOME}
 ROOTDIR = $(CURDIR)
 
 ifndef CUDA_PATH
-  CUDA_PATH = /usr/local/cuda
+	CUDA_PATH = /usr/local/cuda
 endif
 
-NNVM_PATH = $(ROOTDIR)/nnvm
-NNVM_RTC_PATH = $(ROOTDIR)/nnvm-rtc
+ifndef NNVM_PATH
+	NNVM_PATH = $(ROOTDIR)/nnvm
+endif
+
+ifndef NNVM_PATH
+	NNVM_RTC_PATH = $(ROOTDIR)/nnvm-rtc
+endif
 
 export LDFLAGS = -pthread -lm
 export CFLAGS =  -std=c++11 -Wall -O2 -msse2  -Wno-unknown-pragmas -funroll-loops\
 	  -fPIC -Iinclude -Idmlc-core/include -I$(NNVM_PATH)/include -I$(NNVM_RTC_PATH)/include
-
-CFLAGS  += -I$(TORCH_PATH)/install/include -I$(TORCH_PATH)/install/include/TH \
-	  	   -I$(TORCH_PATH)/install/include/THC/ -I$(CUDA_PATH)/include
-LDFLAGS += -L$(TORCH_PATH)/install/lib -lluajit -lluaT -lTH -lTHC \
-		   -L$(CUDA_PATH)/lib64 -lcuda -lnvrtc -lcudart
 
 .PHONY: clean all test lint doc
 
@@ -25,13 +25,17 @@ UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S), Darwin)
 	WHOLE_ARCH= -all_load
 	NO_WHOLE_ARCH= -noall_load
-	CFLAGS += -I$(TORCH_PATH)/install/include -I$(TORCH_PATH)/install/include/TH
-	LDFLAGS += -L$(TORCH_PATH)/install/lib -llua -lluaT -lTH
+	CFLAGS  += -I$(TORCH_PATH)/install/include -I$(TORCH_PATH)/install/include/TH \
+			   -I$(CUDA_PATH)/include
+	LDFLAGS += -L$(TORCH_PATH)/install/lib -llua -lluaT -lTH \
+			   -L$(CUDA_PATH)/lib64 -lcuda -lnvrtc -lcudart
 else
 	WHOLE_ARCH= --whole-archive
 	NO_WHOLE_ARCH= --no-whole-archive
-	CFLAGS += -I$(TORCH_PATH)/install/include -I$(TORCH_PATH)/install/include/TH -I$(TORCH_PATH)/install/include/THC/
-	LDFLAGS += -L$(TORCH_PATH)/install/lib -lluajit -lluaT -lTH -lTHC
+	CFLAGS  += -I$(TORCH_PATH)/install/include -I$(TORCH_PATH)/install/include/TH \
+			   -I$(TORCH_PATH)/install/include/THC/ -I$(CUDA_PATH)/include
+	LDFLAGS += -L$(TORCH_PATH)/install/lib -lluajit -lluaT -lTH -lTHCa \
+			   -L$(CUDA_PATH)/lib64 -lcuda -lnvrtc -lcudart
 endif
 
 SRC = $(wildcard src/*.cc src/*/*.cc src/*/*/*.cc)
@@ -43,9 +47,6 @@ LIB_DEP = $(NNVM_PATH)/lib/libnnvm.a $(NNVM_RTC_PATH)/lib/libnnvm-rtc.a
 ALL_DEP = $(OBJ) $(LIB_DEP)
 
 all: lib/libtinyflow.so
-
-include tests/cpp/unittest.mk
-test: $(TEST)
 
 build/src/%.o: src/%.cc
 	@mkdir -p $(@D)

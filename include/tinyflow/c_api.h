@@ -8,15 +8,7 @@
 
 #include <nnvm/c_api.h>
 
-typedef void* TBlobHandle;
 typedef void* SessionHandle;
-
-NNVM_DLL int NNTBlobCreate(float* dptr,
-                  const nn_uint* shape,
-                  const nn_uint ndim,
-                  const nn_uint dtype,
-                  const nn_uint dev_mask,
-                  TBlobHandle* out);
 
 NNVM_DLL int NNSessionCreate(SessionHandle* handle, const char* option);
 

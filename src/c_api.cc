@@ -38,22 +38,6 @@ struct TinyAPIThreadLocalEntry {
 
 using namespace tinyflow;
 
-int NNTBlobCreate(float* dptr,
-                  const nn_uint* shape_data,
-                  const nn_uint ndim,
-                  const nn_uint dtype,
-                  const nn_uint dev_mask,
-                  TBlobHandle* out) {
-  API_BEGIN();
-  TBlob* ptblob = new TBlob();
-  ptblob->data   = (void*)dptr;  // NOLINT(*)
-  ptblob->shape  = TShape(shape_data, shape_data + ndim);
-  ptblob->dev_mask = dev_mask;
-  ptblob->dtype = dtype;
-  *out = ptblob;
-  API_END();
-}
-
 int NNSessionCreate(SessionHandle* handle, const char* option) {
   API_BEGIN();
   *handle = Session::Create(option);

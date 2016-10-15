@@ -22,10 +22,9 @@ else:
 
 import ctypes as _ctypes
 from nnvm.name import NameManager
-from nnvm._base import c_str, c_array, nn_uint, check_call, _LIB
+from nnvm._base import c_str, check_call, _LIB
 from nnvm import symbol, graph
 from nnvm import _symbol_internal
-import numpy as np
 
 __all__ = ["float32", "placeholder", "Variable", "group",
            "initialize_all_variables", "gradients"]
@@ -76,21 +75,3 @@ def gradients(ys, xs, grad_ys=None):
     nx = len(xs) if isinstance(xs, list) else len(xs.list_output_names())
     ret = [sym[i] for i in range(nx)]
     return ret
-
-TBlobHandle = _ctypes.c_void_p
-
-def TBlobCreate(nd):
-    assert isinstance(nd, np.ndarray)
-    out = TBlobHandle()
-    source_array = np.ascontiguousarray(nd, dtype=np.float32)
-    dptr = source_array.ctypes.data_as(_ctypes.c_void_p)
-    print(nd)
-    print(dptr)
-    check_call(_LIB.NNTBlobCreate(
-      dptr,
-      c_array(nn_uint, source_array.shape),
-      nn_uint(len(source_array.shape)),
-      nn_uint(0),
-      nn_uint(1),
-      _ctypes.byref(out)))
-    return out

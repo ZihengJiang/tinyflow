@@ -1,7 +1,7 @@
 /*!
  *  Copyright (c) 2015 by Contributors
  * \file rtc.cc
- * \brief Wrapper for NVRTC
+ * \brief wrapper for NVRTC
  */
 #include <nnvm-rtc/rtc.h>
 #include <cuda_runtime.h>
@@ -9,8 +9,10 @@
 
 namespace nnvm {
 namespace rtc {
+
 const char RTC::str_type[] = "float";
 std::unordered_map<std::string, char*> RTC::kernel_registry;
+
 
 RTC::RTC(const std::string& name, const std::string& kernel) {
   name_ = name;
@@ -85,6 +87,7 @@ void RTC::Run(std::vector<void*> const& input,
   CUDA_SAFE_CALL(cuCtxSynchronize());
 }
 
+
 // std::string RTC::decorate(const std::string& name,
 //                          std::vector<std::pair<std::string, TShape> > const& input,
 //                          std::vector<std::pair<std::string, TShape> > const& output,
@@ -124,6 +127,7 @@ void RTC::Run(std::vector<void*> const& input,
 //     return source;
 // }
 
+
 char* RTC::compile(const std::string& name, const std::string& code) {
     nvrtcProgram prog;
     NVRTC_SAFE_CALL(nvrtcCreateProgram(&prog,
@@ -147,5 +151,6 @@ char* RTC::compile(const std::string& name, const std::string& code) {
     // LOG(INFO) << "RTC Compile Successfully";
     return ptx;
 }
+
 }  // namespace rtc
 }  // namespace nnvm

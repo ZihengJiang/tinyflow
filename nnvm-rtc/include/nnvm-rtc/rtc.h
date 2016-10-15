@@ -1,7 +1,7 @@
 /*!
  *  Copyright (c) 2016 by Contributors
  * \file rtc.h
- * \brief Wrapper for NVRTC
+ * \brief wrapper for NVRTC
  */
 #ifndef NNVM_RTC_RTC_H_
 #define NNVM_RTC_RTC_H_
@@ -62,24 +62,22 @@ class RTC {
    * If the same kernel has been compiled before it will be load from
    * cache instead of compile again.
    * \param name name of the kernel function.
-   * \param input list of input ndarrays and their name.
-   * \param output list of output ndarrays and their name.
    * \param kernel cuda code.
    */
   RTC(const std::string& name, const std::string& kernel);
   /*!
    * \brief launch a kernel for flat tensor with the engine.
-   * \param input list of input ndarray.
-   * \param output list of output ndarray.
+   * \param input list of input CUdeviceptr address.
+   * \param output list of output CUdeviceptr address.
    * \param num_elements number of elements.
    */
   void Run(std::vector<void*> const& input,
            std::vector<void*> const& output,
            uint32_t num_elements);
   /*!
-   * \brief launch a kernel with the engine.
-   * \param input list of input ndarray.
-   * \param output list of output ndarray.
+   * \brief launch a kernel for flat tensor with the engine.
+   * \param input list of input CUdeviceptr address.
+   * \param output list of output CUdeviceptr address.
    * \param grid_dim_X kernel grid dimensions.
    * \param grid_dim_Y kernel grid dimensions.
    * \param grid_dim_Z kernel grid dimensions.

@@ -1,12 +1,12 @@
 /*!
  *  Copyright (c) 2016 by Contributors
  * \file ast.h
- * \brief TODO
+ * \brief defines AST class for code generation
  */
 #ifndef NNVM_RTC_AST_H_
 #define NNVM_RTC_AST_H_
 
-#include <nnvm-rtc/base.h>
+#include "./base.h"
 
 namespace nnvm {
 namespace rtc {
@@ -33,7 +33,7 @@ class VariableAST : public AST {
   VariableAST(std::string name)
     : name_(name) {}
   inline std::string CodeGen() override {
-    // TODO Check whether variable exists?
+    // TODO(ziheng) Check whether variable exists?
     return name_;
   }
  private:

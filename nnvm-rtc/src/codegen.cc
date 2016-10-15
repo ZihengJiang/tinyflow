@@ -1,20 +1,21 @@
 /*!
  *  Copyright (c) 2016 by Contributors
  * \file codegen.cc
- * \brief TODO
+ * \brief implementation of code generation
  */
 #include <nnvm-rtc/base.h>
 #include <nnvm-rtc/ast.h>
 #include <nnvm/pass.h>
 #include <iostream>
 #include <fstream>
-// TODO remove stream header file after finished
+// TODO(ziheng) stream header file should be removed after debug
 
 namespace nnvm {
 namespace rtc {
 namespace {
 
 using ASTPtrIter = std::vector<ASTPtr>::const_iterator;
+
 
 uint32_t GetVariableNum(const FusionNodePtr fnode) {
   uint32_t num = 0;
@@ -27,6 +28,7 @@ uint32_t GetVariableNum(const FusionNodePtr fnode) {
   }
   return num;
 }
+
 
 ASTPtr GenASTPtr(const FusionNodePtr fnode, ASTPtrIter begin, ASTPtrIter end) {
   static const OpMap<FCodeGen>& gen_map = Op::GetAttr<FCodeGen>("FCodeGen");
@@ -50,6 +52,7 @@ ASTPtr GenASTPtr(const FusionNodePtr fnode, ASTPtrIter begin, ASTPtrIter end) {
   return gen(fnode, cur_inputs)[0];
 }
 
+
 void PrintFNode(const FusionNodePtr fnode, int indent=0) {
   std::string s = "";
   for (int i = 0; i < indent; ++i) {
@@ -70,6 +73,7 @@ void PrintFNode(const FusionNodePtr fnode, int indent=0) {
     }
   }
 }
+
 
 Kernel KernelCodeGen(const std::string& kernel_name, const FusionGraph& fgraph) {
   const std::string type_str = "float";
@@ -108,6 +112,7 @@ Kernel KernelCodeGen(const std::string& kernel_name, const FusionGraph& fgraph) 
   file.close();
   return Kernel(kernel_name, kernel_str);
 }
+
 
 Graph CodeGen(Graph ret) {
   std::unordered_map<uint32_t, Kernel> kernel_map;
