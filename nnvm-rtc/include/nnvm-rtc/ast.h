@@ -10,13 +10,16 @@
 
 namespace nnvm {
 namespace rtc {
+// Reference: http://clang.llvm.org/doxygen/classclang_1_1Expr.html
 
+/*! \brief base class for all ast nodes */
 class AST {
  public:
   virtual ~AST() {}
   virtual std::string CodeGen() = 0;
 };
 
+/*! \brief AST class for numeric literals like "1.0" */
 class NumberAST : public AST {
  public:
   NumberAST(double val)
@@ -28,6 +31,7 @@ class NumberAST : public AST {
   double val_;
 };
 
+/*! \brief AST class for referencing a variable, like "a" */
 class VariableAST : public AST {
  public:
   VariableAST(std::string name)
@@ -40,6 +44,7 @@ class VariableAST : public AST {
   std::string name_;
 };
 
+/*! \brief AST class for a binary operator */
 class BinaryAST : public AST {
  public:
   BinaryAST(char op, ASTPtr lhs, ASTPtr rhs)
@@ -52,6 +57,7 @@ class BinaryAST : public AST {
   ASTPtr lhs_, rhs_;
 };
 
+/*! \brief AST class for function calls */
 class CallAST : public AST {
  public:
   CallAST(const std::string& callee, std::vector<ASTPtr> args)
@@ -72,6 +78,7 @@ class CallAST : public AST {
   std::vector<ASTPtr> args_;
 };
 
+/*! \brief AST class for array subscript expression */
 class ArraySubscriptAST : public AST {
  public:
   ArraySubscriptAST(ASTPtr lhs, ASTPtr rhs)

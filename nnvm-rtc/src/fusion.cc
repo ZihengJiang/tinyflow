@@ -18,12 +18,11 @@ FusionNodePtr CreateFusionNode(NodePtr n) {
   ret->attrs.name   = n->attrs.name;
   ret->attrs.dict   = n->attrs.dict;
   ret->attrs.parsed = n->attrs.parsed;
-  // TODO(ziheng) NodeEntry.index?
   ret->inputs.resize(n->num_inputs(), NodeEntry{nullptr, 0, 0});
   return ret;
 }
 
-static bool IsFusible(NodePtr n1, NodePtr n2) {
+bool IsFusible(NodePtr n1, NodePtr n2) {
   static const OpMap<bool>& ewise_map = Op::GetAttr<bool>("IsElementWise");
   static const OpMap<FCodeGen>& gen_map = Op::GetAttr<FCodeGen>("FCodeGen");
   if (n1->op() != nullptr         &&
@@ -38,7 +37,6 @@ static bool IsFusible(NodePtr n1, NodePtr n2) {
   return false;
 }
 
-// TODO(ziheng) Reconsider Remap Process
 Graph Fusion(const Graph& src) {
   std::unordered_map<const Node*, NodePtr>        mirror_map;
   std::unordered_map<const Node*, FusionNodePtr>  node_fnode;
@@ -71,7 +69,7 @@ Graph Fusion(const Graph& src) {
         }
         FusionNodePtr child_fnode = CreateFusionNode(it->node);
         node_fnode[it->node.get()] = child_fnode;
-        cur_fnode->inputs[it - children.begin()] = NodeEntry{child_fnode, 0, 0};
+        cur_fnode->inputs[it - children.begin()] = NodeEntry{child_fnode, 0, it->version+1};
       }
     }
 
@@ -116,6 +114,8 @@ Graph Fusion(const Graph& src) {
 
   // remap old node with new node
   auto remap = [&](const NodePtr& n) {
+    // for those are not in mirror_map, if need_map,
+    // create a new node and add it to mirror_map
     if (mirror_map.count(n.get()) == 0) {
       bool need_map = false;
       NodePtr new_node = Node::Create();
@@ -147,8 +147,22 @@ Graph Fusion(const Graph& src) {
     }
   };
   DFSVisit(src.outputs, remap);
-  // TODO how about A(fusion_op)->B(normal_op)->C(fusion_op)
-  // we should update C's inputs also
+
+  // update inputs and control deps of nodes which
+  // are in mirror_map already, like fusion nodes
+  for (auto kv : mirror_map) {
+    for (auto it = kv.second->inputs.begin(); it != kv.second->inputs.end(); ++it) {
+      if (mirror_map.count(it->node.get())) {
+        *it = NodeEntry{mirror_map.at(it->node.get()), it->index, it->version+1};
+      }
+    }
+    for (auto it = kv.second->control_deps.begin();
+         it != kv.second->control_deps.end(); ++it) {
+      if (mirror_map.count(it->get())) {
+        *it = mirror_map.at(it->get());
+      }
+    }
+  }
 
   // rebuild return graph
   Graph ret;
