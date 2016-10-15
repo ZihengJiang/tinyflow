@@ -10,7 +10,7 @@ ifndef NNVM_PATH
 	NNVM_PATH = $(ROOTDIR)/nnvm
 endif
 
-ifndef NNVM_PATH
+ifndef NNVM_RTC_PATH
 	NNVM_RTC_PATH = $(ROOTDIR)/nnvm-rtc
 endif
 
@@ -34,7 +34,7 @@ else
 	NO_WHOLE_ARCH= --no-whole-archive
 	CFLAGS  += -I$(TORCH_PATH)/install/include -I$(TORCH_PATH)/install/include/TH \
 			   -I$(TORCH_PATH)/install/include/THC/ -I$(CUDA_PATH)/include
-	LDFLAGS += -L$(TORCH_PATH)/install/lib -lluajit -lluaT -lTH -lTHCa \
+	LDFLAGS += -L$(TORCH_PATH)/install/lib -lluajit -lluaT -lTH -lTHC \
 			   -L$(CUDA_PATH)/lib64 -lcuda -lnvrtc -lcudart
 endif
 
