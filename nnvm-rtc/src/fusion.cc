@@ -216,7 +216,7 @@ inline bool FusionShape(const NodeAttrs& attrs,
 
 // register pass
 NNVM_REGISTER_PASS(Fusion)
-.describe("TODO")
+.describe("fusion pass")
 .set_body(Fusion)
 .set_change_graph(true);
 
