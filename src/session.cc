@@ -349,7 +349,7 @@ TorchExecutor::Run(const std::unordered_map<std::string, TBlob>& inputs) {
           std::vector<LuaRef> in_array;
           std::vector<TBlob>  input_tblobs;
           for (const auto& e : inode.inputs) {
-            LOG(INFO) << "Get Input Item: " << idx[e.node_id].source->attrs.name;
+            LOG(INFO) << "Get Input Item[" << e.node_id << "]: " << idx[e.node_id].source->attrs.name;
             LuaRef item = data_entry_[idx.entry_id(e)];
             in_array.push_back(item);
             input_tblobs.push_back(th->GetTBlob(item));
@@ -358,23 +358,13 @@ TorchExecutor::Run(const std::unordered_map<std::string, TBlob>& inputs) {
           std::vector<TBlob>  output_tblobs;
           for (uint32_t index = 0; index < inode.source->num_outputs(); ++index) {
             uint32_t eid = idx.entry_id(i, index);
-            if (idx[eid].source) {
-                LOG(INFO) << "Get Output Item: " << idx[eid].source->attrs.name;
+            if (eid < idx.num_nodes() && idx[eid].source) {
+              LOG(INFO) << "Get Output Item[" << eid << "]: " << idx[eid].source->attrs.name;
             }
             LuaRef item = data_entry_[eid];
             out_array.push_back(item);
             output_tblobs.push_back(th->GetTBlob(item));
           }
-
-          // for (int i = 0; i < inode.inputs.size(); ++i) {
-          //   std::cout << input_tblobs[i].shape << " ";
-          //   CUdeviceptr dp = reinterpret_cast<CUdeviceptr>(input_tblobs[i].data);
-          //   cuMemcpyDtoH(hp, dp, sizeof(float) * num_elements);
-          //   for (int i = 0; i < (num_elements > 10 ? 10 : num_elements); ++i) {
-          //     std::cout << hp[i] << " ";
-          //   }
-          //   std::cout << std::endl;
-          // }
 
           LOG(INFO) << "before run exec";
           LOG(INFO) << "Input TBlobs:";
@@ -387,16 +377,6 @@ TorchExecutor::Run(const std::unordered_map<std::string, TBlob>& inputs) {
           PrintTBlobs(input_tblobs);
           LOG(INFO) << "Output TBlobs:";
           PrintTBlobs(output_tblobs);
-
-          // for (int i = 0; i < inode.inputs.size(); ++i) {
-          //   std::cout << input_tblobs[i].shape << " ";
-          //   CUdeviceptr dp = reinterpret_cast<CUdeviceptr>(input_tblobs[i].data);
-          //   cuMemcpyDtoH(hp, dp, sizeof(float) * num_elements);
-          //   for (int i = 0; i < (num_elements > 10 ? 10 : num_elements); ++i) {
-          //     std::cout << hp[i] << " ";
-          //   }
-          //   std::cout << std::endl;
-          // }
         }
       } catch (dmlc::Error e) {
         LOG(INFO) << "error catched in op " << idx[i].source->op()->name;

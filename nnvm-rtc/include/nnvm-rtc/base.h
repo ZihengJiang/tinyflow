@@ -6,6 +6,7 @@
 #ifndef NNVM_RTC_BASE_H_
 #define NNVM_RTC_BASE_H_
 
+#include <dmlc/logging.h>
 #include <nnvm/graph.h>
 #include <nnvm/node.h>
 #include <functional>

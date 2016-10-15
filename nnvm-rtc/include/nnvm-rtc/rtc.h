@@ -5,9 +5,9 @@
  */
 #ifndef NNVM_RTC_RTC_H_
 #define NNVM_RTC_RTC_H_
-#include <dmlc/base.h>
-#include <dmlc/logging.h>
+#include "./base.h"
 #include <cuda.h>
+#include <cuda_runtime.h>
 #include <nvrtc.h>
 #include <unordered_map>
 #include <vector>
@@ -100,19 +100,10 @@ class RTC {
   static std::unordered_map<std::string, char*> kernel_registry;
 
   std::string name_;
-  index_t num_input_, num_output_;
-  std::string code_;
+  std::string kernel_;
   char* ptx_;
-  std::unordered_map<int, CUmodule> module_;
-  std::unordered_map<int, CUfunction> func_;
+  CUfunction func_{nullptr};
 
-//  /*!
-//   * \brief add supporting code to kernel.
-//   */
-//  std::string decorate(const std::string& name,
-//                       std::vector<std::pair<std::string, TShape> > const& input,
-//                       std::vector<std::pair<std::string, TShape> > const& output,
-//                       const std::string kernel);
   /*!
    * \brief compile the kernel with nvrtc.
    */

@@ -14,8 +14,10 @@ namespace {
 
 FusionNodePtr CreateFusionNode(NodePtr n) {
   FusionNodePtr ret = FusionNode::Create();
-  ret->attrs.op   = n->op();
-  ret->attrs.name = n->attrs.name;
+  ret->attrs.op     = n->op();
+  ret->attrs.name   = n->attrs.name;
+  ret->attrs.dict   = n->attrs.dict;
+  ret->attrs.parsed = n->attrs.parsed;
   // TODO(ziheng) NodeEntry.index?
   ret->inputs.resize(n->num_inputs(), NodeEntry{nullptr, 0, 0});
   return ret;

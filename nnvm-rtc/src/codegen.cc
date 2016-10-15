@@ -44,7 +44,6 @@ ASTPtr GenASTPtr(const FusionNodePtr fnode, ASTPtrIter begin, ASTPtrIter end) {
       ++it;
     } else {
       uint32_t num = GetVariableNum(jt->node);
-      LOG(INFO) << "num: " << num;
       cur_inputs.push_back(GenASTPtr(jt->node, it, it + num));
       it += num;
     }
@@ -81,7 +80,6 @@ Kernel KernelCodeGen(const std::string& kernel_name, const FusionGraph& fgraph) 
   FusionNodePtr fnode = fgraph.outputs[0].node;
   PrintFNode(fnode);
   uint32_t num = GetVariableNum(fnode);
-  LOG(INFO) << "num = " << num;
 
   std::string arg_str = "(";
   for (uint32_t i = 0; i < num; ++i) {
@@ -101,10 +99,10 @@ Kernel KernelCodeGen(const std::string& kernel_name, const FusionGraph& fgraph) 
 
   std::string kernel_str =
     "extern \"C\" __global__ void " + kernel_name + arg_str + " {\n" +
-    "    unsigned int global_idx = blockIdx.x * blockDim.x + threadIdx.x;\n"
-    "    if (global_idx < num_elements) {\n"
-    "        y[global_idx] = " + exp_str + ";\n" +
-    "    }\n"
+    "  unsigned int global_idx = blockIdx.x * blockDim.x + threadIdx.x;\n"
+    "  if (global_idx < num_elements) {\n"
+    "    y[global_idx] = " + exp_str + ";\n" +
+    "  }\n"
     "}";
   std::ofstream file;
   file.open(kernel_name + ".cu");
