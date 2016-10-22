@@ -1,5 +1,4 @@
 from . import _base
-from . import _session
 from nnvm import symbol as _sym
 
 class GradientDescentOptimizer(object):
@@ -11,7 +10,6 @@ class GradientDescentOptimizer(object):
         grads = _base.gradients(obj, variables)
         updates = []
         for v, g in zip(variables, grads):
-            self.g = g
             updates.append(_sym.assign(v, v + (-self.learning_rate) * g))
         return _base.group(*updates)
 
@@ -31,7 +29,7 @@ class AdamOptimizer(object):
         variables = obj.list_input_variables()
         grads = _base.gradients(obj, variables)
         updates = []
-        # due to no broadcast now
+        # due to no broadcast now, make `t` as a multi-dimension tensor
         self.t = _base.Variable(_sym.zeros_like(variables[0]), self.name + '_t')
         for i, v in enumerate(variables):
             self.m.append(_base.Variable(_sym.zeros_like(v), self.name + '_m' + str(i)))
