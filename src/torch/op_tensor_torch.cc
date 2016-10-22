@@ -15,7 +15,29 @@ NNVM_REGISTER_OP(zeros)
 )");
 
 
+NNVM_REGISTER_OP(zeros_like)
+.set_attr<FLuaCompute>(
+  "FLuaCompute", R"(
+  function(x, y, kwarg)
+    return function()
+      y[1]:fill(0)
+    end
+  end
+)");
+
+
 NNVM_REGISTER_OP(ones)
+.set_attr<FLuaCompute>(
+  "FLuaCompute", R"(
+  function(x, y, kwarg)
+    return function()
+      y[1]:fill(1)
+    end
+  end
+)");
+
+
+NNVM_REGISTER_OP(ones_like)
 .set_attr<FLuaCompute>(
   "FLuaCompute", R"(
   function(x, y, kwarg)
@@ -52,17 +74,6 @@ NNVM_REGISTER_OP(equal)
 )");
 
 
-NNVM_REGISTER_OP(ones_like)
-.set_attr<FLuaCompute>(
-  "FLuaCompute", R"(
-  function(x, y, kwarg)
-    return function()
-      y[1]:fill(1)
-    end
-  end
-)");
-
-
 NNVM_REGISTER_OP(__add_symbol__)
 .set_attr<FLuaCompute>(
   "FLuaCompute", R"(
@@ -74,12 +85,48 @@ NNVM_REGISTER_OP(__add_symbol__)
 )");
 
 
+NNVM_REGISTER_OP(__add_scalar__)
+.set_attr<FLuaCompute>(
+  "FLuaCompute", R"(
+  function(x, y, kwarg)
+    local scalar = tonumber(kwarg.scalar)
+    return function()
+      torch.add(y[1], x[1], scalar)
+    end
+  end
+)");
+
+
 NNVM_REGISTER_OP(__sub_symbol__)
 .set_attr<FLuaCompute>(
   "FLuaCompute", R"(
   function(x, y, kwarg)
     return function()
-      torch.csub(y[1], x[1], x[2])
+      torch.add(y[1], x[1], -x[2])
+    end
+  end
+)");
+
+
+NNVM_REGISTER_OP(__sub_scalar__)
+.set_attr<FLuaCompute>(
+  "FLuaCompute", R"(
+  function(x, y, kwarg)
+    local scalar = tonumber(kwarg.scalar)
+    return function()
+      torch.add(y[1], x[1], -scalar)
+    end
+  end
+)");
+
+
+NNVM_REGISTER_OP(__rsub_scalar__)
+.set_attr<FLuaCompute>(
+  "FLuaCompute", R"(
+  function(x, y, kwarg)
+    local scalar = tonumber(kwarg.scalar)
+    return function()
+      torch.add(y[1], -x[1], scalar)
     end
   end
 )");
@@ -96,17 +143,6 @@ NNVM_REGISTER_OP(__mul_symbol__)
 )");
 
 
-NNVM_REGISTER_OP(__div_symbol__)
-.set_attr<FLuaCompute>(
-  "FLuaCompute", R"(
-  function(x, y, kwarg)
-    return function()
-      torch.cdiv(y[1], x[1], x[2])
-    end
-  end
-)");
-
-
 NNVM_REGISTER_OP(__mul_scalar__)
 .set_attr<FLuaCompute>(
   "FLuaCompute", R"(
@@ -114,6 +150,17 @@ NNVM_REGISTER_OP(__mul_scalar__)
     local scalar = tonumber(kwarg.scalar)
     return function()
       torch.mul(y[1], x[1], scalar)
+    end
+  end
+)");
+
+
+NNVM_REGISTER_OP(__div_symbol__)
+.set_attr<FLuaCompute>(
+  "FLuaCompute", R"(
+  function(x, y, kwarg)
+    return function()
+      torch.cdiv(y[1], x[1], x[2])
     end
   end
 )");
@@ -136,6 +183,40 @@ NNVM_REGISTER_OP(log)
   function(x, y, kwarg)
     return function()
       torch.log(y[1], x[1])
+    end
+  end
+)");
+
+
+NNVM_REGISTER_OP(sqrt)
+.set_attr<FLuaCompute>(
+  "FLuaCompute", R"(
+  function(x, y, kwarg)
+    return function()
+      torch.sqrt(y[1], x[1])
+    end
+  end
+)");
+
+
+NNVM_REGISTER_OP(__pow_symbol__)
+.set_attr<FLuaCompute>(
+  "FLuaCompute", R"(
+  function(x, y, kwarg)
+    return function()
+      torch.cpow(y[1], x[1], x[2])
+    end
+  end
+)");
+
+
+NNVM_REGISTER_OP(rpow)
+.set_attr<FLuaCompute>(
+  "FLuaCompute", R"(
+  function(x, y, kwarg)
+    local scalar = tonumber(kwarg.scalar)
+    return function()
+      torch.pow(y[1], scalar, x[1])
     end
   end
 )");

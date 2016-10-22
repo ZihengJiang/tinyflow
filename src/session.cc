@@ -16,11 +16,6 @@ using nnvm::IndexedGraph;
 using nnvm::ShapeVector;
 using nnvm::DTypeVector;
 using nnvm::StorageVector;
-using nnvm::rtc::Kernel;
-using nnvm::rtc::RTC;
-
-using RTCMap     = std::unordered_map<uint32_t, RTC>;
-using KernelMap  = std::unordered_map<uint32_t, Kernel>;
 
 class TorchExecutor;
 
@@ -52,42 +47,46 @@ struct VarState {
   }
 };
 
+static void PrintTBlobs(const std::vector<TBlob>& tblobs) {
+  for (uint32_t i = 0; i < tblobs.size(); ++i) {
+    std::cout << "tblob.data: " << reinterpret_cast<uint64_t>(tblobs[i].data) << " ";
+    if (tblobs[i].data) {
+      cudaPointerAttributes attr;
+      CUDA_RUNTIME_SAFE_CALL(cudaPointerGetAttributes(&attr, tblobs[i].data));
+      switch (attr.memoryType) {
+         case cudaMemoryTypeHost:
+             std::cout << "cudaMemoryTypeHost";
+            break;
+         case cudaMemoryTypeDevice:
+            std::cout << "cudaMemoryTypeDevice";
+            break;
+      }
+      std::cout << std::endl;
+    }
+  }
+  for (uint32_t i = 0; i < tblobs.size(); ++i) {
+    int num_elements = 1;
+    for (auto it = tblobs[i].shape.begin();
+              it != tblobs[i].shape.end(); ++it) {
+        num_elements *= (*it);
+    }
+
+    float *hp = new float[num_elements];
+    std::cout << tblobs[i].shape << " ";
+    CUdeviceptr dp = reinterpret_cast<CUdeviceptr>(tblobs[i].data);
+    cuMemcpyDtoH(hp, dp, sizeof(float) * num_elements);
+    for (int i = 0; i < (num_elements > 10 ? 10 : num_elements); ++i) {
+      std::cout << hp[i] << " ";
+    }
+    std::cout << std::endl;
+    delete[] hp;
+  }
+}
+
 // shared variable map structure
 using VarStateMap = std::unordered_map<std::string, std::shared_ptr<VarState> >;
 // operator executor closures
 using FOpExec = std::function<void()>;
-
-static FOpExec rtc_closure_generate(RTC& rtc,
-                                    const std::vector<LuaRef>& input_luaref,
-                                    std::vector<LuaRef>& output_luaref) {
-  auto ret = [&rtc, input_luaref, output_luaref]() {
-    auto* th = TorchState::ThreadLocalState();
-    std::vector<TBlob> input_tblobs, output_tblobs;
-    CUdeviceptr input_dptr[input_luaref.size()], output_dptr[output_luaref.size()];
-    std::vector<void*> input, output;
-
-    for (size_t i = 0; i < input_luaref.size(); ++i) {
-      input_tblobs.push_back(th->GetTBlob(input_luaref[i]));
-      input_dptr[i] = reinterpret_cast<CUdeviceptr>(input_tblobs[i].data);
-      input.push_back(&input_dptr[i]);
-    }
-
-    for (size_t i = 0; i < output_luaref.size(); ++i) {
-      output_tblobs.push_back(th->GetTBlob(output_luaref[i]));
-      output_dptr[i] = reinterpret_cast<CUdeviceptr>(output_tblobs[i].data);
-      output.push_back(&output_dptr[i]);
-    }
-
-    int num_elements = 1;
-    for (auto it = input_tblobs[0].shape.begin();
-              it != input_tblobs[0].shape.end(); ++it) {
-        num_elements *= (*it);
-    }
-
-    rtc.Run(input, output, num_elements);
-  };
-  return ret;
-}
 
 // torch session.
 class TorchSession : public Session {
@@ -96,9 +95,6 @@ class TorchSession : public Session {
   explicit TorchSession(const std::string& config) {
     if (config.find("gpu") != std::string::npos) {
       default_dev_mask_ = kGPU;
-      if (config.find("fusion") != std::string::npos) {
-        enable_fusion_ = true;
-      }
     }
   }
   const std::vector<TBlob>&
@@ -112,7 +108,6 @@ class TorchSession : public Session {
     size_t use_count{0};
   };
   int default_dev_mask_{kCPU};
-  bool enable_fusion_{false};
   // local cached variable states.
   VarStateMap states_;
   // cached executor
@@ -124,7 +119,7 @@ class TorchExecutor {
  public:
   // initialize the executor
   // possibly update the states.
-  void Init(nnvm::Symbol symbol, VarStateMap* states, int default_dev_mask, bool enable_fusion);
+  void Init(nnvm::Symbol symbol, VarStateMap* states, int default_dev_mask);
   /// run the executor, return the outputs.
   const std::vector<TBlob>& Run(const std::unordered_map<std::string, TBlob>& inputs);
   // return corresponding internal symbol
@@ -146,13 +141,10 @@ class TorchExecutor {
   const ShapeVector* node_shape_{nullptr};
   // type vector in graph attribute
   const DTypeVector* node_dtype_{nullptr};
-  const KernelMap*   node_kernel_{nullptr};
-  std::shared_ptr<RTCMap> node_rtc_{nullptr};
   // ----------------------------
   // node auxiliary data structures
   // The device of this executor
   int dev_mask_{kGPU};
-  bool enable_fusion_;
   // node id of place holder ops
   std::vector<uint32_t> placeholder_nids_;
   // size of number of node, placeholder_tblobs_[nid].data != nullptr
@@ -214,22 +206,17 @@ const std::vector<TBlob>& TorchSession::Run(
   cached_execs_.clear();
   ExecEntry e;
   e.exec = std::make_shared<TorchExecutor>();
-  e.exec->Init(*sym, &states_, default_dev_mask_, enable_fusion_);
+  e.exec->Init(*sym, &states_, default_dev_mask_);
   cached_execs_[sym] = e;
   return e.exec->Run(inputs);
 }
 
 void TorchExecutor::Init(nnvm::Symbol symbol,
                          VarStateMap* states,
-                         int default_dev_mask,
-                         bool enable_fusion) {
+                         int default_dev_mask) {
   dev_mask_ = default_dev_mask;
   if (dev_mask_ == kGPU) TorchState::ThreadLocalState()->InitGPU();
-  enable_fusion_ = enable_fusion;
   graph_.outputs = symbol.outputs;
-  if (enable_fusion) {
-    graph_ = ApplyPasses(std::move(graph_), {"Fusion", "CodeGen"});
-  }
   symbol_.outputs = graph_.outputs;
 
   // initialize all node auxiliary data structures.
@@ -314,8 +301,6 @@ TorchExecutor::Run(const std::unordered_map<std::string, TBlob>& inputs) {
 void TorchExecutor::Setup(const std::unordered_map<std::string, TBlob>& inputs) {
   bool need_redo_infer;
   SetupShapeDType(inputs, &need_redo_infer);
-  if (enable_fusion_)
-    SetupRTC();
   if (need_redo_infer) SetupStorage();
   if (need_redo_infer) {
     op_execs_.clear();
@@ -379,8 +364,12 @@ void TorchExecutor::SetupShapeDType(
 
   for (uint32_t nid : read_var_nids_) {
     VarState* state = node_states_[nid];
-    CHECK(state->initialized())
-        << "Attempt to execute a graph un-initialized Variable";
+    if (!state->initialized()) {
+        LOG(WARNING) << "Attempt to execute a graph un-initialized Variable";
+        continue;
+    }
+    // CHECK(state->initialized())
+    //     << "Attempt to execute a graph un-initialized Variable";
     new_shape[idx.entry_id(nid, 0)] = state->blob.shape;
     new_dtype[idx.entry_id(nid, 0)] = state->blob.dtype;
   }
@@ -405,14 +394,6 @@ void TorchExecutor::SetupShapeDType(
         node_shape_->at(idx.entry_id(nid, 0)),
         dev_mask_,
         node_dtype_->at(idx.entry_id(nid, 0)));
-  }
-}
-
-void TorchExecutor::SetupRTC() {
-  node_kernel_ = &(graph_.GetAttr<KernelMap>("kernel"));
-  node_rtc_ = std::make_shared<RTCMap>();
-  for (auto kv = node_kernel_->cbegin(); kv != node_kernel_->cend(); ++kv) {
-    node_rtc_->insert(std::pair<uint32_t, RTC>(kv->first, RTC(kv->second.first, kv->second.second)));
   }
 }
 
@@ -635,7 +616,7 @@ void TorchExecutor::SetupOpExecs() {
   for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
     const auto& inode = idx[nid];
     if (inode.source->is_variable()) continue;
-    std::vector<LuaRef> in_array, out_array;
+    std::vector<LuaRef> in_array, out_array; // TODO
     for (const auto& e : inode.inputs) {
       in_array.push_back(data_entry_[idx.entry_id(e)]);
     }
@@ -644,9 +625,7 @@ void TorchExecutor::SetupOpExecs() {
       out_array.push_back(data_entry_[eid]);
     }
 
-    if (node_rtc_ && node_rtc_->count(nid)) {
-      op_execs_[nid] = rtc_closure_generate(node_rtc_->at(nid), in_array, out_array);
-    } else if (lua_compute_code.count(inode.source->op())) {
+    if (lua_compute_code.count(inode.source->op())) {
       // compute function
       std::string lua_str = "return " + lua_compute_code[inode.source->op()];
       LuaRef fcompute = lua->Eval(lua_str);
