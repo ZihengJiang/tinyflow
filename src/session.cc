@@ -95,7 +95,6 @@ class TorchExecutor {
   void Setup(const std::unordered_map<std::string, TBlob>& inputs);
   void SetupShapeDType(const std::unordered_map<std::string, TBlob>& inputs, bool* need_redo_infer);
   void SetupStorage();
-  void SetupRTC();
   void SetupOpExecs();
   // internal symbol and graph
   nnvm::Symbol symbol_;
@@ -579,7 +578,7 @@ void TorchExecutor::SetupOpExecs() {
   for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
     const auto& inode = idx[nid];
     if (inode.source->is_variable()) continue;
-    std::vector<LuaRef> in_array, out_array; // TODO
+    std::vector<LuaRef> in_array, out_array;
     for (const auto& e : inode.inputs) {
       in_array.push_back(data_entry_[idx.entry_id(e)]);
     }

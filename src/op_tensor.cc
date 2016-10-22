@@ -213,6 +213,21 @@ NNVM_REGISTER_OP(__div_symbol__)
 });
 
 
+NNVM_REGISTER_OP(__div_scalar__)
+.describe("division symbol with scalar")
+.set_num_inputs(1)
+.include("ElementwiseOpAttr")
+.set_attr<FInplaceOption>("FInplaceOption", InplaceIn0Out0)
+.set_attr<FGradient>(
+    "FGradient", [](const NodePtr& n,
+                    const std::vector<NodeEntry>& ograds){
+      return std::vector<NodeEntry>{
+        MakeNode("__div_scalar__", n->attrs.name + "_grad_0",
+                 {ograds[0]}, {{"scalar", n->attrs.dict["scalar"]}}),
+      };
+});
+
+
 NNVM_REGISTER_OP(exp)
 .describe("take elemtnwise exponation")
 .set_num_inputs(1)
@@ -247,6 +262,7 @@ NNVM_REGISTER_OP(sqrt)
 .describe("return square root of input")
 .set_num_inputs(1)
 .include("ElementwiseOpAttr")
+.set_attr<FInplaceOption>("FInplaceOption", InplaceIn0Out0)
 .set_attr<FGradient>(
     // 1 / (2 * sqrt(x)) == 1 / (2 * y)
     "FGradient", [](const NodePtr& n,
@@ -265,6 +281,7 @@ NNVM_REGISTER_OP(__pow_symbol__)
 .describe("take elmtnwise power between two tensor")
 .set_num_inputs(2)
 .include("ElementwiseOpAttr")
+.set_attr<FInplaceOption>("FInplaceOption", InplaceIn0Out0)
 .set_attr<FGradient>(
     "FGradient", [](const NodePtr& n,
                     const std::vector<NodeEntry>& ograds) {
@@ -289,10 +306,11 @@ NNVM_REGISTER_OP(__pow_symbol__)
 });
 
 
-NNVM_REGISTER_OP(rpow)
+NNVM_REGISTER_OP(__rpow_scalar__)
 .describe("take elmtnwise power between a number and a tensor")
 .set_num_inputs(1)
 .include("ElementwiseOpAttr")
+.set_attr<FInplaceOption>("FInplaceOption", InplaceIn0Out0)
 .set_attr<FGradient>(
     "FGradient", [](const NodePtr& n,
                     const std::vector<NodeEntry>& ograds) {
