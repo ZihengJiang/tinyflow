@@ -99,7 +99,7 @@ static FOpExec rtc_closure_generate(RTC& rtc,
                                     const std::vector<LuaRef>& input_luaref,
                                     std::vector<LuaRef>& output_luaref) {
   auto ret = [&rtc, input_luaref, output_luaref]() {
-    LOG(INFO) << "Execution";
+    // LOG(INFO) << "Execution";
     auto* th = TorchState::ThreadLocalState();
     std::vector<TBlob> input_tblobs, output_tblobs;
     CUdeviceptr input_dptr[input_luaref.size()], output_dptr[output_luaref.size()];
@@ -108,8 +108,8 @@ static FOpExec rtc_closure_generate(RTC& rtc,
     for (size_t i = 0; i < input_luaref.size(); ++i) {
       input_tblobs.push_back(th->GetTBlob(input_luaref[i]));
     }
-    LOG(INFO) << "Input TBlobs:";
-    PrintTBlobs(input_tblobs);
+    // LOG(INFO) << "Input TBlobs:";
+    // PrintTBlobs(input_tblobs);
     for (size_t i = 0; i < input_luaref.size(); ++i) {
       input_dptr[i] = reinterpret_cast<CUdeviceptr>(input_tblobs[i].data);
       input.push_back(&input_dptr[i]);
@@ -118,8 +118,8 @@ static FOpExec rtc_closure_generate(RTC& rtc,
     for (size_t i = 0; i < output_luaref.size(); ++i) {
       output_tblobs.push_back(th->GetTBlob(output_luaref[i]));
     }
-    LOG(INFO) << "Output TBlobs:";
-    PrintTBlobs(output_tblobs);
+    // LOG(INFO) << "Output TBlobs:";
+    // PrintTBlobs(output_tblobs);
     for (size_t i = 0; i < output_luaref.size(); ++i) {
       output_dptr[i] = reinterpret_cast<CUdeviceptr>(output_tblobs[i].data);
       output.push_back(&output_dptr[i]);
@@ -132,7 +132,7 @@ static FOpExec rtc_closure_generate(RTC& rtc,
     }
 
     rtc.Run(input, output, num_elements);
-    LOG(INFO) << "Run Successfully. num_elements: " << num_elements;
+    // LOG(INFO) << "Run Successfully. num_elements: " << num_elements;
   };
   return ret;
 }
@@ -246,6 +246,12 @@ const std::vector<TBlob>& TorchSession::Run(
         if (s.outputs[i].node.get() != sym->outputs[i].node.get() ||
             s.outputs[i].index != sym->outputs[i].index ||
             s.outputs[i].version != sym->outputs[i].version) {
+          // LOG(INFO) << "s.node: " << s.outputs[i].node->attrs.name;
+          // LOG(INFO) << "s.index: " << s.outputs[i].index;
+          // LOG(INFO) << "s.version: " << s.outputs[i].version;
+          // LOG(INFO) << "sym.node: " << sym->outputs[i].node->attrs.name;
+          // LOG(INFO) << "sym.index: " << sym->outputs[i].index;
+          // LOG(INFO) << "sym.version: " << sym->outputs[i].version;
           stale_exec = true; break;
         }
       }
@@ -277,13 +283,13 @@ void TorchExecutor::Init(nnvm::Symbol symbol,
   graph_.outputs = symbol.outputs;
   symbol_ = symbol;
   if (enable_fusion) {
-    LOG(INFO) << "Before Fusion&CodeGen";
-    symbol.Print(std::cout);
+    // LOG(INFO) << "Before Fusion&CodeGen";
+    // symbol.Print(std::cout);
     graph_ = ApplyPasses(std::move(graph_), {"Fusion", "CodeGen"});
-    LOG(INFO) << "After Fusion&CodeGen";
+    // LOG(INFO) << "After Fusion&CodeGen";
   }
+  // TODO symbol_?
   symbol.outputs = graph_.outputs;
-  symbol.Print(std::cout);
 
   // initialize all node auxiliary data structures.
   const Op* assign_op = Op::Get("assign");
@@ -342,41 +348,41 @@ TorchExecutor::Run(const std::unordered_map<std::string, TBlob>& inputs) {
       try {
         // if (!op_execs_[i].is_nil()) op_execs_[i]();
         if (op_execs_[i]) {
-          LOG(INFO) << "Prepare for run op_execs_[" << i << "]";
-          const auto& inode = idx[i];
-          LOG(INFO) << "Get Inode[" << i << "]: " << inode.source->attrs.name;
+          // LOG(INFO) << "Prepare for run op_execs_[" << i << "]";
+          // const auto& inode = idx[i];
+          // LOG(INFO) << "Get Inode[" << i << "]: " << inode.source->attrs.name;
 
-          std::vector<LuaRef> in_array;
-          std::vector<TBlob>  input_tblobs;
-          for (const auto& e : inode.inputs) {
-            LOG(INFO) << "Get Input Item[" << e.node_id << "]: " << idx[e.node_id].source->attrs.name;
-            LuaRef item = data_entry_[idx.entry_id(e)];
-            in_array.push_back(item);
-            input_tblobs.push_back(th->GetTBlob(item));
-          }
-          std::vector<LuaRef> out_array;
-          std::vector<TBlob>  output_tblobs;
-          for (uint32_t index = 0; index < inode.source->num_outputs(); ++index) {
-            uint32_t eid = idx.entry_id(i, index);
-            if (eid < idx.num_nodes() && idx[eid].source) {
-              LOG(INFO) << "Get Output Item[" << eid << "]: " << idx[eid].source->attrs.name;
-            }
-            LuaRef item = data_entry_[eid];
-            out_array.push_back(item);
-            output_tblobs.push_back(th->GetTBlob(item));
-          }
+          // std::vector<LuaRef> in_array;
+          // std::vector<TBlob>  input_tblobs;
+          // for (const auto& e : inode.inputs) {
+          //   LOG(INFO) << "Get Input Item[" << e.node_id << "]: " << idx[e.node_id].source->attrs.name;
+          //   LuaRef item = data_entry_[idx.entry_id(e)];
+          //   in_array.push_back(item);
+          //   input_tblobs.push_back(th->GetTBlob(item));
+          // }
+          // std::vector<LuaRef> out_array;
+          // std::vector<TBlob>  output_tblobs;
+          // for (uint32_t index = 0; index < inode.source->num_outputs(); ++index) {
+          //   uint32_t eid = idx.entry_id(i, index);
+          //   if (eid < idx.num_nodes() && idx[eid].source) {
+          //     LOG(INFO) << "Get Output Item[" << eid << "]: " << idx[eid].source->attrs.name;
+          //   }
+          //   LuaRef item = data_entry_[eid];
+          //   out_array.push_back(item);
+          //   output_tblobs.push_back(th->GetTBlob(item));
+          // }
 
-          LOG(INFO) << "before run exec";
-          LOG(INFO) << "Input TBlobs:";
-          PrintTBlobs(input_tblobs);
-          LOG(INFO) << "Output TBlobs:";
-          PrintTBlobs(output_tblobs);
+          // LOG(INFO) << "before run exec";
+          // LOG(INFO) << "Input TBlobs:";
+          // PrintTBlobs(input_tblobs);
+          // LOG(INFO) << "Output TBlobs:";
+          // PrintTBlobs(output_tblobs);
           op_execs_[i]();
-          LOG(INFO) << "after run exec";
-          LOG(INFO) << "Input TBlobs:";
-          PrintTBlobs(input_tblobs);
-          LOG(INFO) << "Output TBlobs:";
-          PrintTBlobs(output_tblobs);
+          // LOG(INFO) << "after run exec";
+          // LOG(INFO) << "Input TBlobs:";
+          // PrintTBlobs(input_tblobs);
+          // LOG(INFO) << "Output TBlobs:";
+          // PrintTBlobs(output_tblobs);
         }
       } catch (dmlc::Error e) {
         LOG(INFO) << "error catched in op " << idx[i].source->op()->name;
@@ -466,8 +472,12 @@ void TorchExecutor::SetupShapeDType(
 
   for (uint32_t nid : read_var_nids_) {
     VarState* state = node_states_[nid];
-    CHECK(state->initialized())
-        << "Attempt to execute a graph un-initialized Variable";
+    if (!state->initialized()) {
+        LOG(WARNING) << "Attempt to execute a graph un-initialized Variable";
+        continue;
+    }
+    // CHECK(state->initialized())
+    //     << "Attempt to execute a graph un-initialized Variable";
     new_shape[idx.entry_id(nid, 0)] = state->blob.shape;
     new_dtype[idx.entry_id(nid, 0)] = state->blob.dtype;
   }
@@ -649,8 +659,23 @@ void TorchExecutor::SetupOpExecs() {
     return
     function(m, input, output, weight, gradInput, gradOutput, gradWeight)
       if torch.isTypeOf(m, nn.Module) then
+        print("nn_module")
+        for i, module in ipairs(m:listModules()) do
+            print(module)
+        end
+        print("input")
+        print(input)
+        print("output")
+        print(output)
+        print("weight")
+        print(weight)
+        print("gradOutput")
+        print(gradOutput)
+        print("gradWeight")
+        print(gradWeight)
         if m:parameters() ~= nil then
           return function()
+            print("parameters")
             local W, gW = m:parameters()
             for i, t in ipairs(W) do
               t:set(weight[i])
@@ -676,6 +701,7 @@ void TorchExecutor::SetupOpExecs() {
           end
         else
           return function()
+            print("no parameters")
             m.output:set(output)
             m.gradInput:set(gradInput)
             m:updateGradInput(input, gradOutput)
@@ -683,6 +709,8 @@ void TorchExecutor::SetupOpExecs() {
               gradInput:copy(m.gradInput)
               m.gradInput:set(gradInput)
             end
+            print("gradInput")
+            print(gradInput)
           end
         end
       else
@@ -725,7 +753,7 @@ void TorchExecutor::SetupOpExecs() {
   // setup the array and requirements.
   for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
     const auto& inode = idx[nid];
-    LOG(INFO) << "nid: " << nid <<  ", SetupOpExecs: " << inode.source->attrs.name;
+    // LOG(INFO) << "nid: " << nid <<  ", SetupOpExecs: " << inode.source->attrs.name;
     if (inode.source->is_variable()) continue;
     std::vector<LuaRef> in_array, out_array; // TODO
     for (const auto& e : inode.inputs) {
@@ -737,17 +765,27 @@ void TorchExecutor::SetupOpExecs() {
     }
 
     if (node_rtc_ && node_rtc_->count(nid)) {
-      LOG(INFO) << "rtc_closure_generate";
+      // LOG(INFO) << "rtc_closure_generate";
       op_execs_[nid] = rtc_closure_generate(node_rtc_->at(nid), in_array, out_array);
     } else if (lua_compute_code.count(inode.source->op())) {
-      LOG(INFO) << "compute_function";
+      // LOG(INFO) << "compute_function";
       // compute function
       std::string lua_str = "return " + lua_compute_code[inode.source->op()];
       LuaRef fcompute = lua->Eval(lua_str);
+      std::unordered_map<std::string, std::string> dict;
+      if (inode.source->op()->name == "assign") {
+        LOG(INFO) << inode.source->attrs.name << " input size: " << inode.inputs.size();
+        dict["lhs"] = std::string(inode.source->inputs[0].node->attrs.name);
+        dict["rhs"] = std::string(inode.source->inputs[1].node->attrs.name);
+      } else {
+        dict = inode.source->attrs.dict;
+      }
+      // op_execs_[nid] = fcompute(
+      //     in_array, out_array, inode.source->attrs.dict);
       op_execs_[nid] = fcompute(
-          in_array, out_array, inode.source->attrs.dict);
+          in_array, out_array, dict);
     } else if (!op_exec_modules_[nid].is_nil()) {
-      LOG(INFO) << "nn_module_forward";
+      // LOG(INFO) << "nn_module_forward";
       // nn module forward
       std::vector<LuaRef> weights;
       for (size_t i = 1; i < in_array.size(); ++i) {

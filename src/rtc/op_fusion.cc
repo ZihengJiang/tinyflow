@@ -56,7 +56,6 @@ NNVM_REGISTER_OP(__mul_scalar__)
 .set_attr<FCodeGen>(
   "FCodeGen", [](const NodePtr& n,
     const std::vector<ASTPtr>& inputs) {
-    LOG(INFO) << n->attrs.dict["scalar"];
     double val = std::stod(n->attrs.dict["scalar"]);
     ASTPtr num_ast = ASTPtr(new NumberAST(val));
     return std::vector<ASTPtr>{
