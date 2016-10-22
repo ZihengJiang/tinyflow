@@ -1,8 +1,6 @@
 // Copyright (c) 2016 by Contributors
 #include <tinyflow/base.h>
 #include <nnvm/pass_functions.h>
-#include <nnvm-rtc/base.h>
-#include <nnvm-rtc/rtc.h>
 #include <memory>
 #include <functional>
 #include "./op_util.h"
@@ -47,41 +45,6 @@ struct VarState {
   }
 };
 
-static void PrintTBlobs(const std::vector<TBlob>& tblobs) {
-  for (uint32_t i = 0; i < tblobs.size(); ++i) {
-    std::cout << "tblob.data: " << reinterpret_cast<uint64_t>(tblobs[i].data) << " ";
-    if (tblobs[i].data) {
-      cudaPointerAttributes attr;
-      CUDA_RUNTIME_SAFE_CALL(cudaPointerGetAttributes(&attr, tblobs[i].data));
-      switch (attr.memoryType) {
-         case cudaMemoryTypeHost:
-             std::cout << "cudaMemoryTypeHost";
-            break;
-         case cudaMemoryTypeDevice:
-            std::cout << "cudaMemoryTypeDevice";
-            break;
-      }
-      std::cout << std::endl;
-    }
-  }
-  for (uint32_t i = 0; i < tblobs.size(); ++i) {
-    int num_elements = 1;
-    for (auto it = tblobs[i].shape.begin();
-              it != tblobs[i].shape.end(); ++it) {
-        num_elements *= (*it);
-    }
-
-    float *hp = new float[num_elements];
-    std::cout << tblobs[i].shape << " ";
-    CUdeviceptr dp = reinterpret_cast<CUdeviceptr>(tblobs[i].data);
-    cuMemcpyDtoH(hp, dp, sizeof(float) * num_elements);
-    for (int i = 0; i < (num_elements > 10 ? 10 : num_elements); ++i) {
-      std::cout << hp[i] << " ";
-    }
-    std::cout << std::endl;
-    delete[] hp;
-  }
-}
 
 // shared variable map structure
 using VarStateMap = std::unordered_map<std::string, std::shared_ptr<VarState> >;
@@ -274,7 +237,7 @@ TorchExecutor::Run(const std::unordered_map<std::string, TBlob>& inputs) {
                        data_entry_[idx.entry_id(i, 0)]);
       }
       try {
-        // if (!op_execs_[i].is_nil()) op_execs_[i]();
+        // TODO op_execs_[i].nil()?
         if (op_execs_[i]) {
           op_execs_[i]();
         }

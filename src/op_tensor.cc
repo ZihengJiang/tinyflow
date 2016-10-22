@@ -156,11 +156,12 @@ NNVM_REGISTER_OP(__rsub_scalar__)
 });
 
 
-NNVM_REGISTER_OP(__mul_symbol__)
-.add_alias("mul")
-.describe("multiply two data together")
+NNVM_REGISTER_OP(mul)
+.add_alias("__mul_symbol__")
+.describe("add two data together")
 .set_num_inputs(2)
 .include("ElementwiseOpAttr")
+.set_attr<FInplaceOption>("FInplaceOption", InplaceIn0Out0)
 .set_attr<FGradient>(
     "FGradient", [](const NodePtr& n,
                     const std::vector<NodeEntry>& ograds){
