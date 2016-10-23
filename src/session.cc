@@ -8,8 +8,6 @@
 #include "./op_util.h"
 #include "./torch/torch_util.h"
 
-#include <cuda_runtime.h> // cudaPointerAttributes
-
 namespace tinyflow {
 
 using dmlc::any;
@@ -18,11 +16,8 @@ using nnvm::IndexedGraph;
 using nnvm::ShapeVector;
 using nnvm::DTypeVector;
 using nnvm::StorageVector;
-using nnvm::rtc::Kernel;
 using nnvm::rtc::RTC;
-
-using RTCMap     = std::unordered_map<uint32_t, RTC>;
-using KernelMap  = std::unordered_map<uint32_t, Kernel>;
+using nnvm::rtc::RTCMap;
 
 class TorchExecutor;
 
@@ -54,42 +49,6 @@ struct VarState {
   }
 };
 
-static void PrintTBlobs(const std::vector<TBlob>& tblobs) {
-  for (uint32_t i = 0; i < tblobs.size(); ++i) {
-    std::cout << "tblob.data: " << reinterpret_cast<uint64_t>(tblobs[i].data) << " ";
-    if (tblobs[i].data) {
-      cudaPointerAttributes attr;
-      CUDA_RUNTIME_SAFE_CALL(cudaPointerGetAttributes(&attr, tblobs[i].data));
-      switch (attr.memoryType) {
-         case cudaMemoryTypeHost:
-             std::cout << "cudaMemoryTypeHost";
-            break;
-         case cudaMemoryTypeDevice:
-            std::cout << "cudaMemoryTypeDevice";
-            break;
-      }
-      std::cout << std::endl;
-    }
-  }
-  for (uint32_t i = 0; i < tblobs.size(); ++i) {
-    int num_elements = 1;
-    for (auto it = tblobs[i].shape.begin();
-              it != tblobs[i].shape.end(); ++it) {
-        num_elements *= (*it);
-    }
-
-    float *hp = new float[num_elements];
-    std::cout << tblobs[i].shape << " ";
-    CUdeviceptr dp = reinterpret_cast<CUdeviceptr>(tblobs[i].data);
-    cuMemcpyDtoH(hp, dp, sizeof(float) * num_elements);
-    for (int i = 0; i < (num_elements > 10 ? 10 : num_elements); ++i) {
-      std::cout << hp[i] << " ";
-    }
-    std::cout << std::endl;
-    delete[] hp;
-  }
-}
-
 // shared variable map structure
 using VarStateMap = std::unordered_map<std::string, std::shared_ptr<VarState> >;
 // operator executor closures
@@ -99,40 +58,27 @@ static FOpExec rtc_closure_generate(RTC& rtc,
                                     const std::vector<LuaRef>& input_luaref,
                                     std::vector<LuaRef>& output_luaref) {
   auto ret = [&rtc, input_luaref, output_luaref]() {
-    // LOG(INFO) << "Execution";
     auto* th = TorchState::ThreadLocalState();
-    std::vector<TBlob> input_tblobs, output_tblobs;
     CUdeviceptr input_dptr[input_luaref.size()], output_dptr[output_luaref.size()];
     std::vector<void*> input, output;
 
     for (size_t i = 0; i < input_luaref.size(); ++i) {
-      input_tblobs.push_back(th->GetTBlob(input_luaref[i]));
-    }
-    // LOG(INFO) << "Input TBlobs:";
-    // PrintTBlobs(input_tblobs);
-    for (size_t i = 0; i < input_luaref.size(); ++i) {
-      input_dptr[i] = reinterpret_cast<CUdeviceptr>(input_tblobs[i].data);
+      input_dptr[i] = reinterpret_cast<CUdeviceptr>(th->GetTBlob(input_luaref[i]).data);
       input.push_back(&input_dptr[i]);
     }
 
     for (size_t i = 0; i < output_luaref.size(); ++i) {
-      output_tblobs.push_back(th->GetTBlob(output_luaref[i]));
-    }
-    // LOG(INFO) << "Output TBlobs:";
-    // PrintTBlobs(output_tblobs);
-    for (size_t i = 0; i < output_luaref.size(); ++i) {
-      output_dptr[i] = reinterpret_cast<CUdeviceptr>(output_tblobs[i].data);
+      output_dptr[i] = reinterpret_cast<CUdeviceptr>(th->GetTBlob(output_luaref[i]).data);
       output.push_back(&output_dptr[i]);
     }
 
+    TShape ewise_shape = th->GetTBlob(output_luaref[0]).shape;
     int num_elements = 1;
-    for (auto it = input_tblobs[0].shape.begin();
-              it != input_tblobs[0].shape.end(); ++it) {
+    for (auto it = ewise_shape.begin(); it != ewise_shape.end(); ++it) {
         num_elements *= (*it);
     }
 
     rtc.Run(input, output, num_elements);
-    // LOG(INFO) << "Run Successfully. num_elements: " << num_elements;
   };
   return ret;
 }
@@ -185,7 +131,6 @@ class TorchExecutor {
   void Setup(const std::unordered_map<std::string, TBlob>& inputs);
   void SetupShapeDType(const std::unordered_map<std::string, TBlob>& inputs, bool* need_redo_infer);
   void SetupStorage();
-  void SetupRTC();
   void SetupOpExecs();
   // internal symbol and graph
   nnvm::Symbol symbol_;
@@ -194,8 +139,7 @@ class TorchExecutor {
   const ShapeVector* node_shape_{nullptr};
   // type vector in graph attribute
   const DTypeVector* node_dtype_{nullptr};
-  const KernelMap*   node_kernel_{nullptr};
-  std::shared_ptr<RTCMap> node_rtc_{nullptr};
+  RTCMap* node_rtc_{nullptr};
   // ----------------------------
   // node auxiliary data structures
   // The device of this executor
@@ -246,12 +190,6 @@ const std::vector<TBlob>& TorchSession::Run(
         if (s.outputs[i].node.get() != sym->outputs[i].node.get() ||
             s.outputs[i].index != sym->outputs[i].index ||
             s.outputs[i].version != sym->outputs[i].version) {
-          // LOG(INFO) << "s.node: " << s.outputs[i].node->attrs.name;
-          // LOG(INFO) << "s.index: " << s.outputs[i].index;
-          // LOG(INFO) << "s.version: " << s.outputs[i].version;
-          // LOG(INFO) << "sym.node: " << sym->outputs[i].node->attrs.name;
-          // LOG(INFO) << "sym.index: " << sym->outputs[i].index;
-          // LOG(INFO) << "sym.version: " << sym->outputs[i].version;
           stale_exec = true; break;
         }
       }
@@ -283,13 +221,9 @@ void TorchExecutor::Init(nnvm::Symbol symbol,
   graph_.outputs = symbol.outputs;
   symbol_ = symbol;
   if (enable_fusion) {
-    // LOG(INFO) << "Before Fusion&CodeGen";
-    // symbol.Print(std::cout);
-    graph_ = ApplyPasses(std::move(graph_), {"Fusion", "CodeGen"});
-    // LOG(INFO) << "After Fusion&CodeGen";
+    graph_ = ApplyPasses(std::move(graph_), {"Fusion", "CodeGen", "RTCGen"});
+    node_rtc_ = const_cast<RTCMap*>(&(graph_.GetAttr<RTCMap>("rtc")));
   }
-  // TODO symbol_?
-  symbol.outputs = graph_.outputs;
 
   // initialize all node auxiliary data structures.
   const Op* assign_op = Op::Get("assign");
@@ -346,43 +280,9 @@ TorchExecutor::Run(const std::unordered_map<std::string, TBlob>& inputs) {
                        data_entry_[idx.entry_id(i, 0)]);
       }
       try {
-        // if (!op_execs_[i].is_nil()) op_execs_[i]();
+        // TODO op_execs_[i].nil()?
         if (op_execs_[i]) {
-          // LOG(INFO) << "Prepare for run op_execs_[" << i << "]";
-          // const auto& inode = idx[i];
-          // LOG(INFO) << "Get Inode[" << i << "]: " << inode.source->attrs.name;
-
-          // std::vector<LuaRef> in_array;
-          // std::vector<TBlob>  input_tblobs;
-          // for (const auto& e : inode.inputs) {
-          //   LOG(INFO) << "Get Input Item[" << e.node_id << "]: " << idx[e.node_id].source->attrs.name;
-          //   LuaRef item = data_entry_[idx.entry_id(e)];
-          //   in_array.push_back(item);
-          //   input_tblobs.push_back(th->GetTBlob(item));
-          // }
-          // std::vector<LuaRef> out_array;
-          // std::vector<TBlob>  output_tblobs;
-          // for (uint32_t index = 0; index < inode.source->num_outputs(); ++index) {
-          //   uint32_t eid = idx.entry_id(i, index);
-          //   if (eid < idx.num_nodes() && idx[eid].source) {
-          //     LOG(INFO) << "Get Output Item[" << eid << "]: " << idx[eid].source->attrs.name;
-          //   }
-          //   LuaRef item = data_entry_[eid];
-          //   out_array.push_back(item);
-          //   output_tblobs.push_back(th->GetTBlob(item));
-          // }
-
-          // LOG(INFO) << "before run exec";
-          // LOG(INFO) << "Input TBlobs:";
-          // PrintTBlobs(input_tblobs);
-          // LOG(INFO) << "Output TBlobs:";
-          // PrintTBlobs(output_tblobs);
           op_execs_[i]();
-          // LOG(INFO) << "after run exec";
-          // LOG(INFO) << "Input TBlobs:";
-          // PrintTBlobs(input_tblobs);
-          // LOG(INFO) << "Output TBlobs:";
-          // PrintTBlobs(output_tblobs);
         }
       } catch (dmlc::Error e) {
         LOG(INFO) << "error catched in op " << idx[i].source->op()->name;
@@ -407,8 +307,6 @@ TorchExecutor::Run(const std::unordered_map<std::string, TBlob>& inputs) {
 void TorchExecutor::Setup(const std::unordered_map<std::string, TBlob>& inputs) {
   bool need_redo_infer;
   SetupShapeDType(inputs, &need_redo_infer);
-  if (enable_fusion_)
-    SetupRTC();
   if (need_redo_infer) SetupStorage();
   if (need_redo_infer) {
     op_execs_.clear();
@@ -505,17 +403,6 @@ void TorchExecutor::SetupShapeDType(
   }
 }
 
-void TorchExecutor::SetupRTC() {
-  node_kernel_ = &(graph_.GetAttr<KernelMap>("kernel"));
-  node_rtc_ = std::make_shared<RTCMap>();
-  for (auto kv = node_kernel_->cbegin(); kv != node_kernel_->cend(); ++kv) {
-    // std::cout << "Node ID: " << kv->first << std::endl;
-    // std::cout << "Kernel Name: " << kv->second.first << std::endl;
-    // std::cout << "Kernel Content: " << std::endl
-    //           << kv->second.second << std::endl;
-    node_rtc_->insert(std::pair<uint32_t, RTC>(kv->first, RTC(kv->second.first, kv->second.second)));
-  }
-}
 
 void TorchExecutor::SetupStorage() {
   const auto& idx = graph_.indexed_graph();
@@ -659,23 +546,8 @@ void TorchExecutor::SetupOpExecs() {
     return
     function(m, input, output, weight, gradInput, gradOutput, gradWeight)
       if torch.isTypeOf(m, nn.Module) then
-        print("nn_module")
-        for i, module in ipairs(m:listModules()) do
-            print(module)
-        end
-        print("input")
-        print(input)
-        print("output")
-        print(output)
-        print("weight")
-        print(weight)
-        print("gradOutput")
-        print(gradOutput)
-        print("gradWeight")
-        print(gradWeight)
         if m:parameters() ~= nil then
           return function()
-            print("parameters")
             local W, gW = m:parameters()
             for i, t in ipairs(W) do
               t:set(weight[i])
@@ -701,7 +573,6 @@ void TorchExecutor::SetupOpExecs() {
           end
         else
           return function()
-            print("no parameters")
             m.output:set(output)
             m.gradInput:set(gradInput)
             m:updateGradInput(input, gradOutput)
@@ -709,8 +580,6 @@ void TorchExecutor::SetupOpExecs() {
               gradInput:copy(m.gradInput)
               m.gradInput:set(gradInput)
             end
-            print("gradInput")
-            print(gradInput)
           end
         end
       else
@@ -765,27 +634,15 @@ void TorchExecutor::SetupOpExecs() {
     }
 
     if (node_rtc_ && node_rtc_->count(nid)) {
-      // LOG(INFO) << "rtc_closure_generate";
+      // rtc compute
       op_execs_[nid] = rtc_closure_generate(node_rtc_->at(nid), in_array, out_array);
     } else if (lua_compute_code.count(inode.source->op())) {
-      // LOG(INFO) << "compute_function";
       // compute function
       std::string lua_str = "return " + lua_compute_code[inode.source->op()];
       LuaRef fcompute = lua->Eval(lua_str);
-      std::unordered_map<std::string, std::string> dict;
-      if (inode.source->op()->name == "assign") {
-        LOG(INFO) << inode.source->attrs.name << " input size: " << inode.inputs.size();
-        dict["lhs"] = std::string(inode.source->inputs[0].node->attrs.name);
-        dict["rhs"] = std::string(inode.source->inputs[1].node->attrs.name);
-      } else {
-        dict = inode.source->attrs.dict;
-      }
-      // op_execs_[nid] = fcompute(
-      //     in_array, out_array, inode.source->attrs.dict);
       op_execs_[nid] = fcompute(
-          in_array, out_array, dict);
+          in_array, out_array, inode.source->attrs.dict);
     } else if (!op_exec_modules_[nid].is_nil()) {
-      // LOG(INFO) << "nn_module_forward";
       // nn module forward
       std::vector<LuaRef> weights;
       for (size_t i = 1; i < in_array.size(); ++i) {
@@ -795,7 +652,6 @@ void TorchExecutor::SetupOpExecs() {
           op_exec_modules_[nid], in_array[0], out_array[0], weights);
       CHECK_EQ(out_array.size(), 1) << "only support tensor nn module";
     } else if (inode.source->op() == backward_op) {
-      LOG(INFO) << "nn_module_backward";
       // nn module backward
       CHECK_GE(inode.control_deps.size(), 1);
       const NNBackwardParam& param =

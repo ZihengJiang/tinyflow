@@ -12,6 +12,7 @@ using nnvm::rtc::NumberAST;
 using nnvm::rtc::CallAST;
 
 namespace tinyflow {
+
 NNVM_REGISTER_OP(__add_symbol__)
 .set_attr<FCodeGen>(
   "FCodeGen", [](const NodePtr& n,
@@ -21,6 +22,20 @@ NNVM_REGISTER_OP(__add_symbol__)
     };
   }
 );
+
+
+NNVM_REGISTER_OP(__add_scalar__)
+.set_attr<FCodeGen>(
+  "FCodeGen", [](const NodePtr& n,
+    const std::vector<ASTPtr>& inputs) {
+    double val = std::stod(n->attrs.dict["scalar"]);
+    ASTPtr num_ast = ASTPtr(new NumberAST(val));
+    return std::vector<ASTPtr>{
+      inputs[0] + num_ast,
+    };
+  }
+);
+
 
 NNVM_REGISTER_OP(__sub_symbol__)
 .set_attr<FCodeGen>(
@@ -32,6 +47,20 @@ NNVM_REGISTER_OP(__sub_symbol__)
   }
 );
 
+
+NNVM_REGISTER_OP(__rsub_scalar__)
+.set_attr<FCodeGen>(
+  "FCodeGen", [](const NodePtr& n,
+    const std::vector<ASTPtr>& inputs) {
+    double val = std::stod(n->attrs.dict["scalar"]);
+    ASTPtr num_ast = ASTPtr(new NumberAST(val));
+    return std::vector<ASTPtr>{
+      num_ast - inputs[0],
+    };
+  }
+);
+
+
 NNVM_REGISTER_OP(__mul_symbol__)
 .set_attr<FCodeGen>(
   "FCodeGen", [](const NodePtr& n,
@@ -42,6 +71,7 @@ NNVM_REGISTER_OP(__mul_symbol__)
   }
 );
 
+
 NNVM_REGISTER_OP(__div_symbol__)
 .set_attr<FCodeGen>(
   "FCodeGen", [](const NodePtr& n,
@@ -51,6 +81,7 @@ NNVM_REGISTER_OP(__div_symbol__)
     };
   }
 );
+
 
 NNVM_REGISTER_OP(__mul_scalar__)
 .set_attr<FCodeGen>(
@@ -64,6 +95,7 @@ NNVM_REGISTER_OP(__mul_scalar__)
   }
 );
 
+
 NNVM_REGISTER_OP(exp)
 .set_attr<FCodeGen>(
   "FCodeGen", [](const NodePtr& n,
@@ -73,5 +105,31 @@ NNVM_REGISTER_OP(exp)
     };
   }
 );
+
+
+NNVM_REGISTER_OP(sqrt)
+.set_attr<FCodeGen>(
+  "FCodeGen", [](const NodePtr& n,
+    const std::vector<ASTPtr>& inputs) {
+    return std::vector<ASTPtr>{
+      ASTPtr(new CallAST("sqrt", inputs)),
+    };
+  }
+);
+
+
+NNVM_REGISTER_OP(__rpow_scalar__)
+.set_attr<FCodeGen>(
+  "FCodeGen", [](const NodePtr& n,
+    const std::vector<ASTPtr>& inputs) {
+    double val = std::stod(n->attrs.dict["scalar"]);
+    ASTPtr num_ast = ASTPtr(new NumberAST(val));
+    return std::vector<ASTPtr>{
+      ASTPtr(new CallAST("pow", {num_ast, inputs[0]})),
+    };
+  }
+);
+
+
 
 }  // namespace tinyflow

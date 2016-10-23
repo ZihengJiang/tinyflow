@@ -14,6 +14,7 @@ NNVM_REGISTER_OP(zeros)
   end
 )");
 
+
 NNVM_REGISTER_OP(zeros_like)
 .set_attr<FLuaCompute>(
   "FLuaCompute", R"(
@@ -23,6 +24,7 @@ NNVM_REGISTER_OP(zeros_like)
     end
   end
 )");
+
 
 NNVM_REGISTER_OP(ones)
 .set_attr<FLuaCompute>(
@@ -164,6 +166,18 @@ NNVM_REGISTER_OP(__div_symbol__)
 )");
 
 
+NNVM_REGISTER_OP(__div_scalar__)
+.set_attr<FLuaCompute>(
+  "FLuaCompute", R"(
+  function(x, y, kwarg)
+    local scalar = tonumber(kwarg.scalar)
+    return function()
+      torch.div(y[1], x[1], scalar)
+    end
+  end
+)");
+
+
 NNVM_REGISTER_OP(exp)
 .set_attr<FLuaCompute>(
   "FLuaCompute", R"(
@@ -208,7 +222,7 @@ NNVM_REGISTER_OP(__pow_symbol__)
 )");
 
 
-NNVM_REGISTER_OP(rpow)
+NNVM_REGISTER_OP(__rpow_scalar__)
 .set_attr<FLuaCompute>(
   "FLuaCompute", R"(
   function(x, y, kwarg)
@@ -242,19 +256,8 @@ NNVM_REGISTER_OP(_matmul_backward)
     local gradLhs = y[1]
     local gradRhs = y[2]
     return function()
-      print("matmul_backward")
-      print("gradOutput")
-      print(gradOutput)
-      print("lhs")
-      print(lhs)
-      print("rhs")
-      print(rhs)
       torch.mm(gradRhs, lhs:t(), gradOutput)
       torch.mm(gradLhs, gradOutput, rhs:t())
-      print("gradLhs")
-      print(gradLhs)
-      print("gradRhs")
-      print(gradRhs)
     end
   end
 )");

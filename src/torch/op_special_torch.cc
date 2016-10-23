@@ -17,12 +17,6 @@ NNVM_REGISTER_OP(assign)
   "FLuaCompute", R"(
   function(x, y, kwarg)
     return function()
-      print("lhs: ")
-      print(kwarg.lhs)
-      print("rhs: ")
-      print(kwarg.rhs)
-      print("assign")
-      print(x[2])
       x[1]:copy(x[2])
       -- normally inplace optimization prevent this
       if y[1]:storage() ~= x[2]:storage() then
