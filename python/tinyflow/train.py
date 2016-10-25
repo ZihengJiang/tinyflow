@@ -18,7 +18,7 @@ class GradientDescentOptimizer(object):
 class AdamOptimizer(object):
     def __init__(self, learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-04, name='Adam'):
         self.name = name
-        # self.t = _base.Variable(_sym.zeros(shape=[1]), name+'_t')
+        self.t = _base.Variable(_sym.zeros(shape=[1]), name+'_t')
         self.lr = learning_rate
         self.beta1 = beta1
         self.beta2 = beta2
@@ -30,8 +30,6 @@ class AdamOptimizer(object):
         variables = obj.list_input_variables()
         grads = _base.gradients(obj, variables)
         updates = []
-        # due to no broadcast now, make `t` as a multi-dimension tensor
-        self.t = _base.Variable(_sym.zeros_like(variables[0]), self.name + '_t')
         for i, v in enumerate(variables):
             self.m.append(_base.Variable(_sym.zeros_like(v), self.name + '_m' + str(i)))
             self.v.append(_base.Variable(_sym.zeros_like(v), self.name + '_v' + str(i)))

@@ -137,6 +137,16 @@ NNVM_REGISTER_OP(__mul_symbol__)
   "FLuaCompute", R"(
   function(x, y, kwarg)
     return function()
+      if x[1]:dim() == 1 and x[1]:size(1) == 1 then
+        local scalar = x[1][1]
+        torch.mul(y[1], x[2], scalar)
+        return
+      end
+      if x[2]:dim() == 1 and x[2]:size(1) == 1 then
+        local scalar = x[2][1]
+        torch.mul(y[1], x[1], scalar)
+        return
+      end
       torch.cmul(y[1], x[1], x[2])
     end
   end
