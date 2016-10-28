@@ -128,6 +128,8 @@ class TorchExecutor {
 
  private:
   // setup the executor space.
+  void SetupAuxiliaryMembers();
+  void ClearAuxiliaryMembers();
   void Setup(const std::unordered_map<std::string, TBlob>& inputs);
   void SetupShapeDType(const std::unordered_map<std::string, TBlob>& inputs, bool* need_redo_infer);
   void SetupStorage();
@@ -135,6 +137,7 @@ class TorchExecutor {
   // internal symbol and graph
   nnvm::Symbol symbol_;
   nnvm::Graph graph_;
+  VarStateMap* var_states_;
   // shape vector in graph attribute
   const ShapeVector* node_shape_{nullptr};
   // type vector in graph attribute
@@ -178,6 +181,14 @@ Session* Session::Create(const std::string& option) {
   return new TorchSession(option);
 }
 
+void PrintSymbolOutputNames(Symbol* s) {
+  LOG(INFO) << "size = " << s->outputs.size();
+  std::vector<std::string> output_names = s->ListOutputNames();
+  for (auto name : output_names) {
+    std::cout << name << std::endl;
+  }
+}
+
 const std::vector<TBlob>& TorchSession::Run(
     nnvm::Symbol* sym,
     const std::unordered_map<std::string, TBlob>& inputs) {
@@ -185,22 +196,54 @@ const std::vector<TBlob>& TorchSession::Run(
     auto& entry = cached_execs_.at(sym);
     const nnvm::Symbol& s = entry.exec->symbol();
     bool stale_exec = (s.outputs.size() != sym->outputs.size());
+    // LOG(INFO) << "stale: " << (stale_exec ? "true" : "false");
+    if (stale_exec) {
+      std::vector<std::string> sym_output_names = sym->ListOutputNames();
+      std::vector<std::string> s_output_names   = s.ListOutputNames();
+      // LOG(INFO) << "sym.outputs.size() = " << sym->outputs.size();
+      for (auto name : sym_output_names) {
+        std::cout << name << " ";
+      }
+      std::cout << std::endl;
+      // LOG(INFO) << "s.outputs.size()   = " << s.outputs.size();
+      for (auto name : s_output_names) {
+        std::cout << name << " ";
+      }
+      std::cout << std::endl;
+    }
     if (!stale_exec) {
       for (size_t i = 0; i < s.outputs.size(); ++i) {
         if (s.outputs[i].node.get() != sym->outputs[i].node.get() ||
             s.outputs[i].index != sym->outputs[i].index ||
             s.outputs[i].version != sym->outputs[i].version) {
+          LOG(INFO) << "node"    << s.outputs[i].node->attrs.name;
+          LOG(INFO) << "index"   << s.outputs[i].index;
+          LOG(INFO) << "version" << s.outputs[i].version;
+          LOG(INFO) << "node"    << sym->outputs[i].node->attrs.name;
+          LOG(INFO) << "index"   << sym->outputs[i].index;
+          LOG(INFO) << "version" << sym->outputs[i].version;
           stale_exec = true; break;
         }
       }
     }
     if (!stale_exec) {
+      // LOG(INFO) << "Reuse Executor";
       ++entry.use_count;
       return entry.exec->Run(inputs);
     } else {
       cached_execs_.erase(sym);
     }
+  } else {
+    // LOG(INFO) << "sym not in cached_execs";
+    // PrintSymbolOutputNames(sym);
+    // LOG(INFO) << "In cached_execs";
+    // for (auto kv : cached_execs_) {
+    //   PrintSymbolOutputNames(kv.first);
+    //   std::cout << std::endl;
+    // }
   }
+  // LOG(INFO) << "New Executor";
+  // LOG(INFO) << "sym: " << reinterpret_cast<uint64_t>(sym);
   // dump technique, remove all previous executors
   // better strategy, LRU?
   cached_execs_.clear();
@@ -220,11 +263,12 @@ void TorchExecutor::Init(nnvm::Symbol symbol,
   enable_fusion_ = enable_fusion;
   graph_.outputs = symbol.outputs;
   symbol_ = symbol;
-  if (enable_fusion) {
-    graph_ = ApplyPasses(std::move(graph_), {"Fusion", "CodeGen", "RTCGen"});
-    node_rtc_ = const_cast<RTCMap*>(&(graph_.GetAttr<RTCMap>("rtc")));
-  }
+  var_states_ = states;
 
+  SetupAuxiliaryMembers();
+}
+
+void TorchExecutor::SetupAuxiliaryMembers() {
   // initialize all node auxiliary data structures.
   const Op* assign_op = Op::Get("assign");
   const Op* placeholder_op = Op::Get("placeholder");
@@ -240,10 +284,10 @@ void TorchExecutor::Init(nnvm::Symbol symbol,
     auto& inode = idx[nid];
     if (inode.source->is_variable()) {
       const std::string& key = inode.source->attrs.name;
-      if (states->count(key) == 0) {
-        (*states)[key] = std::make_shared<VarState>();
+      if (var_states_->count(key) == 0) {
+        (*var_states_)[key] = std::make_shared<VarState>();
       }
-      node_states_[nid] = states->at(key).get();
+      node_states_[nid] = var_states_->at(key).get();
       if (read_count[nid] != 0 || assign_count[nid] == 0) {
         read_var_nids_.push_back(nid);
       }
@@ -264,6 +308,14 @@ void TorchExecutor::Init(nnvm::Symbol symbol,
       }
     }
   }
+}
+
+void TorchExecutor::ClearAuxiliaryMembers() {
+  placeholder_nids_.clear();
+  placeholder_tblobs_.clear();
+  assign_var_nids_.clear();
+  read_var_nids_.clear();
+  node_states_.clear();
 }
 
 const std::vector<TBlob>&
@@ -307,6 +359,37 @@ TorchExecutor::Run(const std::unordered_map<std::string, TBlob>& inputs) {
 void TorchExecutor::Setup(const std::unordered_map<std::string, TBlob>& inputs) {
   bool need_redo_infer;
   SetupShapeDType(inputs, &need_redo_infer);
+  if (enable_fusion_ && need_redo_infer) {
+    // LOG(INFO) << "Apply Fusion";
+    const auto& idx = graph_.indexed_graph();
+    Symbol s;
+    s.outputs = graph_.outputs;
+    // s.Print(std::cout);
+    // for (uint32_t nid : read_var_nids_) {
+    //   LOG(INFO) << "Before Fusion nid " << nid << ": "
+    //             << idx[nid].source->attrs.name << " "
+    //             << (*node_shape_)[nid];
+    // }
+    // for (uint32_t nid : assign_var_nids_) {
+    //   CHECK(idx[nid].source != nullptr);
+    //   LOG(INFO) << "Before Fusion nid " << nid << ": "
+    //             << idx[nid].source->attrs.name << " "
+    //             << (*node_shape_)[nid];
+    // }
+    // LOG(INFO) << "Apply Fusion";
+    graph_ = ApplyPasses(std::move(graph_), {"Fusion", "CodeGen", "RTCGen"});
+    node_rtc_ = const_cast<RTCMap*>(&(graph_.GetAttr<RTCMap>("rtc")));
+    // LOG(INFO) << "After Fusion";
+    s.outputs = graph_.outputs;
+    // s.Print(std::cout);
+    ClearAuxiliaryMembers();
+    SetupAuxiliaryMembers();
+
+    // LOG(INFO) << "Clear Shape";
+    node_shape_ = nullptr;
+    node_dtype_ = nullptr;
+    SetupShapeDType(inputs, &need_redo_infer);
+  }
   if (need_redo_infer) SetupStorage();
   if (need_redo_infer) {
     op_execs_.clear();
@@ -327,9 +410,11 @@ void TorchExecutor::Setup(const std::unordered_map<std::string, TBlob>& inputs) 
 void TorchExecutor::SetupShapeDType(
     const std::unordered_map<std::string, TBlob>& inputs,
     bool* p_need_redo_infer) {
+  // LOG(INFO) << "SetupShape Begin";
   const auto& idx = graph_.indexed_graph();
   bool& need_redo_infer = *p_need_redo_infer;
   need_redo_infer = (node_shape_ == nullptr);
+  // LOG(INFO) << "need_redo_infer: " << (need_redo_infer ? "true" : "false");
 
   // check the variable states
   if (!need_redo_infer) {
@@ -339,14 +424,18 @@ void TorchExecutor::SetupShapeDType(
       CHECK(state != nullptr);
       CHECK(state->initialized())
           << "Attempt to execute a graph un-initialized Variable";
-      if (node_shape_->at(nid) != state->blob.shape) {
+      if (node_shape_->at(idx.entry_id(nid, 0)) != state->blob.shape) {
+        // LOG(INFO) << "node shape: " << node_shape_->at(idx.entry_id(nid, 0));
+        // LOG(INFO) << "blob shape: " << state->blob.shape;
         need_redo_infer = true; break;
       }
-      if (node_dtype_->at(nid) != state->blob.dtype) {
+      if (node_dtype_->at(idx.entry_id(nid, 0)) != state->blob.dtype) {
         need_redo_infer = true; break;
       }
     }
   }
+  // LOG(INFO) << "need_redo_infer: " << (need_redo_infer ? "true" : "false");
+
   // check placeholder shapes.
   if (!need_redo_infer) {
     for (uint32_t nid : placeholder_nids_) {
@@ -355,6 +444,8 @@ void TorchExecutor::SetupShapeDType(
           << "Not enought placeholder argument to feed_dict";
       const TBlob& value = inputs.at(key);
       if (node_shape_->at(idx.entry_id(nid, 0)) != value.shape) {
+        // LOG(INFO) << "node  shape: " << node_shape_->at(idx.entry_id(nid, 0));
+        // LOG(INFO) << "value shape: " << value.shape;
         need_redo_infer = true; break;
       }
       if (node_dtype_->at(idx.entry_id(nid, 0)) != value.dtype) {
@@ -362,8 +453,12 @@ void TorchExecutor::SetupShapeDType(
       }
     }
   }
+  // LOG(INFO) << "need_redo_infer: " << (need_redo_infer ? "true" : "false");
 
-  if (!need_redo_infer) return;
+  if (!need_redo_infer) {
+      // LOG(INFO) << "SetupShape End";
+      return;
+  }
   // run shape inference.
   ShapeVector new_shape(idx.num_node_entries(), TShape());
   DTypeVector new_dtype(idx.num_node_entries(), -1);
@@ -402,6 +497,7 @@ void TorchExecutor::SetupShapeDType(
         dev_mask_,
         node_dtype_->at(idx.entry_id(nid, 0)));
   }
+  // LOG(INFO) << "SetupShape End";
 }
 
 

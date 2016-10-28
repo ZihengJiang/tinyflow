@@ -324,6 +324,17 @@ NNVM_REGISTER_OP(__rpow_scalar__)
       };
 });
 
+NNVM_REGISTER_OP(__ewise_sum__)
+.describe("elementwise sum")
+.set_num_inputs(nnvm::kVarg)
+.set_attr<FInferShape>("FInferShape", SameShape)
+.set_attr<FInplaceOption>("FInplaceOption", InplaceIn0Out0)
+.set_attr<FGradient>(
+    "FGradient", [](const NodePtr& n,
+                    const std::vector<NodeEntry>& ograds) {
+      LOG(INFO) << "ewise_sum grad";
+      return std::vector<NodeEntry>(n->inputs.size(), ograds[0]);
+});
 
 NNVM_REGISTER_OP(matmul)
 .describe("Matrix multiplication")

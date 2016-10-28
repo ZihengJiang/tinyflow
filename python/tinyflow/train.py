@@ -34,12 +34,12 @@ class AdamOptimizer(object):
             self.m.append(_base.Variable(_sym.zeros_like(v), self.name + '_m' + str(i)))
             self.v.append(_base.Variable(_sym.zeros_like(v), self.name + '_v' + str(i)))
         update_t = _sym.assign(self.t, self.t + 1)
-        self.rate = _sym.sqrt(1 - self.beta2 ** update_t) / (1 -  self.beta1 ** update_t)
-        self.lr_t = self.lr * self.rate
+        rate = _sym.sqrt(1 - self.beta2 ** update_t) / (1 -  self.beta1 ** update_t)
+        lr_t = self.lr * rate
         for var, g, m, v in zip(variables, grads, self.m, self.v):
             update_m = _sym.assign(m, self.beta1 * m + (1 - self.beta1) * g)
             update_v = _sym.assign(v, self.beta2 * v + (1 - self.beta2) * g * g)
             update_var = _sym.assign(var,
-                var - self.lr_t * update_m / (_sym.sqrt(update_v) + self.epsilon))
+                var - lr_t * update_m / (_sym.sqrt(update_v) + self.epsilon))
             updates.append(update_var)
         return _base.group(*updates)
