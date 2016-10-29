@@ -105,6 +105,13 @@ NNVM_REGISTER_OP_GROUP(nn_criterion)
 .set_attr<FInferShape>("FInferShape", ScalarShape);
 
 
+NNVM_REGISTER_OP(sigmoid)
+.describe("Sigmoid operation")
+.set_num_inputs(1)
+.include("nn_module")
+.set_attr<FInferShape>("FInferShape", SameShape);
+
+
 NNVM_REGISTER_OP(softmax)
 .describe("Softmax operation")
 .set_num_inputs(1)

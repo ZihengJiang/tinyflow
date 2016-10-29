@@ -242,8 +242,8 @@ const std::vector<TBlob>& TorchSession::Run(
     //   std::cout << std::endl;
     // }
   }
-  // LOG(INFO) << "New Executor";
-  // LOG(INFO) << "sym: " << reinterpret_cast<uint64_t>(sym);
+  LOG(INFO) << "New Executor";
+  LOG(INFO) << "sym: " << reinterpret_cast<uint64_t>(sym);
   // dump technique, remove all previous executors
   // better strategy, LRU?
   cached_execs_.clear();

@@ -56,10 +56,12 @@ NNVM_REGISTER_OP(zeros)
 .set_attr<FInferShape>("FInferShape", ZeroShape)
 .set_attr<FInferType>("FInferType", ZeroType);
 
+
 NNVM_REGISTER_OP(zeros_like)
 .describe("zeros_like")
 .set_num_inputs(1)
 .set_attr<FInferShape>("FInferShape", SameShape);
+
 
 NNVM_REGISTER_OP(ones)
 .describe("ones")
@@ -224,6 +226,25 @@ NNVM_REGISTER_OP(__div_scalar__)
       return std::vector<NodeEntry>{
         MakeNode("__div_scalar__", n->attrs.name + "_grad_0",
                  {ograds[0]}, {{"scalar", n->attrs.dict["scalar"]}}),
+      };
+});
+
+
+NNVM_REGISTER_OP(__rdiv_scalar__)
+.describe("division scalar with symbol")
+.set_num_inputs(1)
+.include("ElementwiseOpAttr")
+.set_attr<FInplaceOption>("FInplaceOption", InplaceIn0Out0)
+.set_attr<FGradient>(
+    "FGradient", [](const NodePtr& n,
+                    const std::vector<NodeEntry>& ograds){
+      NodeEntry n0 = MakeNode("mul", n->attrs.name + "_grad_sub_0",
+                              {n->inputs[0], n->inputs[0]});
+      NodeEntry n1 = MakeNode("__mul_scalar__", n->attrs.name + "_grad_sub_1",
+                              {ograds[0]}, {{"scalar", "-1"}});
+      return std::vector<NodeEntry>{
+        MakeNode("__div_symbol__", n->attrs.name + "_grad_0",
+                 {n1, n0}),
       };
 });
 

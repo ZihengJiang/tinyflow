@@ -6,6 +6,15 @@
 
 namespace tinyflow {
 
+NNVM_REGISTER_OP(sigmoid)
+.set_attr<FLuaCreateNNModule>(
+  "FLuaCreateNNModule", R"(
+  function(ishape, kwarg)
+    return nn.Sigmoid()
+  end
+)");
+
+
 NNVM_REGISTER_OP(softmax)
 .set_attr<FLuaCreateNNModule>(
   "FLuaCreateNNModule", R"(
