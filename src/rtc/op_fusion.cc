@@ -72,6 +72,19 @@ NNVM_REGISTER_OP(__mul_symbol__)
 );
 
 
+NNVM_REGISTER_OP(__mul_scalar__)
+.set_attr<FCodeGen>(
+  "FCodeGen", [](const NodePtr& n,
+    const std::vector<ASTPtr>& inputs) {
+    double val = std::stod(n->attrs.dict["scalar"]);
+    ASTPtr num = ASTPtr(new FloatAST(val));
+    return std::vector<ASTPtr>{
+      num * inputs[0],
+    };
+  }
+);
+
+
 NNVM_REGISTER_OP(__div_symbol__)
 .set_attr<FCodeGen>(
   "FCodeGen", [](const NodePtr& n,
@@ -91,19 +104,6 @@ NNVM_REGISTER_OP(__rdiv_scalar__)
     ASTPtr num = ASTPtr(new FloatAST(val));
     return std::vector<ASTPtr>{
       num / inputs[0],
-    };
-  }
-);
-
-
-NNVM_REGISTER_OP(__mul_scalar__)
-.set_attr<FCodeGen>(
-  "FCodeGen", [](const NodePtr& n,
-    const std::vector<ASTPtr>& inputs) {
-    double val = std::stod(n->attrs.dict["scalar"]);
-    ASTPtr num = ASTPtr(new FloatAST(val));
-    return std::vector<ASTPtr>{
-      num * inputs[0],
     };
   }
 );

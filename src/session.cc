@@ -360,28 +360,11 @@ void TorchExecutor::Setup(const std::unordered_map<std::string, TBlob>& inputs) 
   bool need_redo_infer;
   SetupShapeDType(inputs, &need_redo_infer);
   if (enable_fusion_ && need_redo_infer) {
-    // LOG(INFO) << "Apply Fusion";
     const auto& idx = graph_.indexed_graph();
-    Symbol s;
-    s.outputs = graph_.outputs;
-    // s.Print(std::cout);
-    // for (uint32_t nid : read_var_nids_) {
-    //   LOG(INFO) << "Before Fusion nid " << nid << ": "
-    //             << idx[nid].source->attrs.name << " "
-    //             << (*node_shape_)[nid];
-    // }
-    // for (uint32_t nid : assign_var_nids_) {
-    //   CHECK(idx[nid].source != nullptr);
-    //   LOG(INFO) << "Before Fusion nid " << nid << ": "
-    //             << idx[nid].source->attrs.name << " "
-    //             << (*node_shape_)[nid];
-    // }
     // LOG(INFO) << "Apply Fusion";
     graph_ = ApplyPasses(std::move(graph_), {"Fusion", "CodeGen", "RTCGen"});
     node_rtc_ = const_cast<RTCMap*>(&(graph_.GetAttr<RTCMap>("rtc")));
     // LOG(INFO) << "After Fusion";
-    s.outputs = graph_.outputs;
-    // s.Print(std::cout);
     ClearAuxiliaryMembers();
     SetupAuxiliaryMembers();
 
