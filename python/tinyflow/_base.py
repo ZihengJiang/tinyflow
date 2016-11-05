@@ -45,7 +45,7 @@ def Variable(init, name=None, dtype=None):
         raise TypeError("Expect initialization expression to be Symbol")
     pre_name = Prefix.current.get(name, 'variable')
     v = symbol.Variable(pre_name)
-    _all_variables[name] = v
+    _all_variables[pre_name] = v
     _all_variable_inits.append(symbol.assign(v, init))
     return v
 
