@@ -103,6 +103,39 @@ NNVM_REGISTER_OP(max_pool)
 )");
 
 
+NNVM_REGISTER_OP(avg_pool)
+.set_attr<FLuaCreateNNModule>(
+  "FLuaCreateNNModule", R"(
+  function(ishape, kwarg)
+    local ksize = nn_parse_tuple(kwarg.ksize)
+    local stride = nn_parse_tuple(kwarg.strides, {1,1,1,1})
+    local kH = ksize[2]
+    local kW = ksize[3]
+    local dH = stride[2]
+    local dW = stride[3]
+    local padH = 0
+    local padW = 0
+    assert(kwarg.data_format == 'NCHW')
+    if kwarg.padding == 'SAME' then
+      padW = math.floor((kW - 1) / 2)
+      padH = math.floor((kH - 1) / 2)
+    end
+    return nn.SpatialAveragePooling(kW, kH, dW, dH, padW, padH)
+  end
+)");
+
+
+NNVM_REGISTER_OP(batch_normalization)
+.set_attr<FLuaCreateNNModule>(
+  "FLuaCreateNNModule", R"(
+  function(ishape, kwarg)
+    local n = ishape[1][2]
+    print(string.format("batch_normalization: n = %d", n))
+    return nn.SpatialBatchNormalization(n)
+  end
+)");
+
+
 NNVM_REGISTER_OP(mean_sparse_softmax_cross_entropy_with_logits)
 .set_attr<FLuaCreateNNModule>(
   "FLuaCreateNNModule", R"(
