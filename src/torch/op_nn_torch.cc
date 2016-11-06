@@ -47,6 +47,18 @@ NNVM_REGISTER_OP(linear)
 )");
 
 
+NNVM_REGISTER_OP(padding)
+.set_attr<FLuaCreateNNModule>(
+  "FLuaCreateNNModule", R"(
+  function(ishape, kwarg)
+    local dim = tonumber(kwarg.dim)
+    local pad = tonumber(kwarg.pad)
+    local m = nn.Padding(dim, pad)
+    return m
+  end
+)");
+
+
 NNVM_REGISTER_OP(conv2d)
 .set_attr<FLuaCreateNNModule>(
   "FLuaCreateNNModule", R"(

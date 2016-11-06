@@ -21,52 +21,34 @@ else:
 
 
 import ctypes as _ctypes
-from nnvm.name import Prefix
+from nnvm.name import NameManager
 from nnvm._base import c_str, check_call, _LIB
 from nnvm import symbol, graph
 from nnvm import _symbol_internal
 
-__all__ = ["float32", "Variable", "variable_scope",
-            "get_variable", "initialize_all_variables",
-            "placeholder", "group", "gradients"]
+__all__ = ["float32", "placeholder", "Variable", "group",
+           "initialize_all_variables", "gradients"]
 
 # data type table
 float32 = 0
 
-# global list of all variables
-_all_variables = {}
-
 # global list of all variable initializers
 _all_variable_inits = []
 
-
-def Variable(init, name=None, dtype=None):
+def Variable(init, name=None):
     if not isinstance(init, symbol.Symbol):
         raise TypeError("Expect initialization expression to be Symbol")
-    pre_name = Prefix.current.get(name, 'variable')
-    v = symbol.Variable(pre_name)
-    _all_variables[pre_name] = v
+    name = NameManager.current.get(name, 'variable')
+    v = symbol.Variable(name)
     _all_variable_inits.append(symbol.assign(v, init))
     return v
 
 
-class variable_scope(Prefix):
-    def __init__(self, name):
-        self.prefix = Prefix(name+'/')
-
-    def __enter__(self):
-        self.prefix.__enter__()
-
-    def __exit__(self, type, value, traceback):
-        self.prefix.__exit__(type, value, traceback)
-
-
-def get_variable(name, shape=None, dtype=None, initializer=None):
-    pre_name = Prefix.current.get(name, 'variable')
-    if pre_name not in _all_variable.keys():
-        return Variable(initializer, name, dtype)
-    else:
-        return _all_variables[pre_name]
+def initialize_all_variables():
+    global _all_variable_inits
+    init_op = group(*_all_variable_inits)
+    _all_variable_inits = []
+    return init_op
 
 
 def placeholder(dtype, shape=None, name=None):
@@ -79,12 +61,6 @@ def group(*inputs):
     x._add_control_deps(symbol.Group(inputs))
     return x
 
-
-def initialize_all_variables():
-    global _all_variable_inits
-    init_op = group(*_all_variable_inits)
-    _all_variable_inits = []
-    return init_op
 
 def gradients(ys, xs, grad_ys=None):
     if isinstance(ys, list):

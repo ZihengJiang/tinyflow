@@ -178,6 +178,38 @@ NNVM_REGISTER_OP(linear)
 .set_attr<FInferShape>("FInferShape", LinearShape);
 
 
+struct PaddingParam : public dmlc::Parameter<PaddingParam> {
+  uint32_t dim;
+  int pad;
+
+  DMLC_DECLARE_PARAMETER(PaddingParam) {
+    DMLC_DECLARE_FIELD(dim).set_default(1);
+    DMLC_DECLARE_FIELD(pad).set_default(0);
+  }
+};
+DMLC_REGISTER_PARAMETER(PaddingParam);
+
+inline bool PaddingShape(const NodeAttrs& attrs,
+                         std::vector<TShape> *ishape,
+                         std::vector<TShape> *oshape) {
+  LOG(INFO) << "PaddingShape Enter";
+  const auto& param = dmlc::get<PaddingParam>(attrs.parsed);
+  if (ishape->at(0).ndim() == 0) return false;
+  TShape out = ishape->at(0);
+  out[param.dim-1] += abs(param.pad);
+  oshape->at(0) = out;
+  LOG(INFO) << "PaddingShape Exit";
+  return true;
+}
+
+NNVM_REGISTER_OP(padding)
+.describe("pads a tensor")
+.set_num_inputs(1)
+.include("nn_module")
+.set_attr_parser(ParamParser<PaddingParam>)
+.set_attr<FInferShape>("FInferShape", PaddingShape);
+
+
 struct ConvPoolParam : public dmlc::Parameter<ConvPoolParam> {
   TShape ksize;
   TShape strides;
