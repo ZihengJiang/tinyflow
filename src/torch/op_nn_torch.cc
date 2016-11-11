@@ -15,6 +15,15 @@ NNVM_REGISTER_OP(softmax)
 )");
 
 
+NNVM_REGISTER_OP(tanh)
+.set_attr<FLuaCreateNNModule>(
+  "FLuaCreateNNModule", R"(
+  function(ishape, kwarg)
+    return nn.Tanh()
+  end
+)");
+
+
 NNVM_REGISTER_OP(relu)
 .set_attr<FLuaCreateNNModule>(
   "FLuaCreateNNModule", R"(
@@ -24,11 +33,12 @@ NNVM_REGISTER_OP(relu)
 )");
 
 
-NNVM_REGISTER_OP(tanh)
+NNVM_REGISTER_OP(leaky_relu)
 .set_attr<FLuaCreateNNModule>(
   "FLuaCreateNNModule", R"(
   function(ishape, kwarg)
-    return nn.Tanh()
+    local leakiness = tonumber(kwarg.leakiness)
+    return nn.LeakyReLU(leakiness)
   end
 )");
 
@@ -47,11 +57,11 @@ NNVM_REGISTER_OP(linear)
 )");
 
 
-NNVM_REGISTER_OP(padding)
+NNVM_REGISTER_OP(pad)
 .set_attr<FLuaCreateNNModule>(
   "FLuaCreateNNModule", R"(
   function(ishape, kwarg)
-    local dim = tonumber(kwarg.dim)
+    local dim = tonumber(kwarg.dim) + 1
     local pad = tonumber(kwarg.pad)
     local m = nn.Padding(dim, pad)
     return m
@@ -115,6 +125,7 @@ NNVM_REGISTER_OP(max_pool)
 )");
 
 
+// TODO: padding
 NNVM_REGISTER_OP(avg_pool)
 .set_attr<FLuaCreateNNModule>(
   "FLuaCreateNNModule", R"(

@@ -27,25 +27,65 @@ from nnvm import symbol, graph
 from nnvm import _symbol_internal
 
 __all__ = ["float32", "placeholder", "Variable", "group",
+           "variable_scope", "get_variable",
            "initialize_all_variables", "gradients"]
 
 # data type table
 float32 = 0
 
+# global list of all variables
+_all_variables = {}
+
 # global list of all variable initializers
 _all_variable_inits = []
 
-def Variable(init, name=None):
-    if not isinstance(init, symbol.Symbol):
-        raise TypeError("Expect initialization expression to be Symbol")
+class variable_scope(object):
+  current = None
+  def __init__(self, prefix):
+    self._old_manager = None
+    self._prefix = prefix
+
+  def __enter__(self):
+    self._old_manager = variable_scope.current
+    variable_scope.current = self
+    return self
+
+  def __exit__(self, ptype, value, trace):
+    assert self._old_manager
+    variable_scope.current = self._old_manager
+
+  def get(self, name):
+    if self._old_manager:
+        prefix = self._old_manager.get(self._prefix) + '/'
+    else:
+        prefix = self._prefix
+    return prefix + name
+
+variable_scope.current = variable_scope("")
+
+
+def Variable(init=None, name=None):
     name = NameManager.current.get(name, 'variable')
     v = symbol.Variable(name)
-    _all_variable_inits.append(symbol.assign(v, init))
+    if init is not None:
+        if not isinstance(init, symbol.Symbol):
+            raise TypeError("Expect initialization expression to be Symbol")
+        _all_variable_inits.append(symbol.assign(v, init))
     return v
+
+
+def get_variable(name, initializer=None):
+  scope_name = variable_scope.current.get(name)
+  if scope_name not in _all_variables:
+    _all_variables[scope_name] = Variable(initializer, scope_name)
+  return _all_variables[scope_name]
 
 
 def initialize_all_variables():
     global _all_variable_inits
+    print("num of all_variable_inits: %d" % len(_all_variable_inits))
+    for v in _all_variable_inits:
+        print(v.list_input_names())
     init_op = group(*_all_variable_inits)
     _all_variable_inits = []
     return init_op

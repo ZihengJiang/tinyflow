@@ -120,6 +120,24 @@ NNVM_REGISTER_OP(relu)
 .set_attr<bool>("TBackwardNeedOutputs", true);
 
 
+struct LeakyReLuParam : public dmlc::Parameter<LeakyReLuParam> {
+  double leakiness;
+
+  DMLC_DECLARE_PARAMETER(LeakyReLuParam) {
+    DMLC_DECLARE_FIELD(leakiness).set_default(0);
+  }
+};
+DMLC_REGISTER_PARAMETER(LeakyReLuParam);
+
+NNVM_REGISTER_OP(leaky_relu)
+.describe("Leaky ReLu operation")
+.set_attr_parser(ParamParser<LeakyReLuParam>)
+.set_num_inputs(1)
+.include("nn_module")
+.set_attr<FInferShape>("FInferShape", SameShape)
+.set_attr<bool>("TBackwardNeedOutputs", true);
+
+
 NNVM_REGISTER_OP(tanh)
 .describe("Tanh operation")
 .set_num_inputs(1)
@@ -178,36 +196,38 @@ NNVM_REGISTER_OP(linear)
 .set_attr<FInferShape>("FInferShape", LinearShape);
 
 
-struct PaddingParam : public dmlc::Parameter<PaddingParam> {
+struct PadParam : public dmlc::Parameter<PadParam> {
   uint32_t dim;
   int pad;
 
-  DMLC_DECLARE_PARAMETER(PaddingParam) {
-    DMLC_DECLARE_FIELD(dim).set_default(1);
+  DMLC_DECLARE_PARAMETER(PadParam) {
+    DMLC_DECLARE_FIELD(dim).set_default(0);
     DMLC_DECLARE_FIELD(pad).set_default(0);
   }
 };
-DMLC_REGISTER_PARAMETER(PaddingParam);
+DMLC_REGISTER_PARAMETER(PadParam);
 
-inline bool PaddingShape(const NodeAttrs& attrs,
+inline bool PadShape(const NodeAttrs& attrs,
                          std::vector<TShape> *ishape,
                          std::vector<TShape> *oshape) {
-  LOG(INFO) << "PaddingShape Enter";
-  const auto& param = dmlc::get<PaddingParam>(attrs.parsed);
-  if (ishape->at(0).ndim() == 0) return false;
+  LOG(INFO) << "PadShape Enter";
+  const auto& param = dmlc::get<PadParam>(attrs.parsed);
+  if (ishape->at(0).ndim() == 0) {
+    return false;
+  }
   TShape out = ishape->at(0);
-  out[param.dim-1] += abs(param.pad);
+  out[param.dim] += abs(param.pad);
   oshape->at(0) = out;
-  LOG(INFO) << "PaddingShape Exit";
+  LOG(INFO) << "PadShape Exit";
   return true;
 }
 
-NNVM_REGISTER_OP(padding)
+NNVM_REGISTER_OP(pad)
 .describe("pads a tensor")
 .set_num_inputs(1)
 .include("nn_module")
-.set_attr_parser(ParamParser<PaddingParam>)
-.set_attr<FInferShape>("FInferShape", PaddingShape);
+.set_attr_parser(ParamParser<PadParam>)
+.set_attr<FInferShape>("FInferShape", PadShape);
 
 
 struct ConvPoolParam : public dmlc::Parameter<ConvPoolParam> {

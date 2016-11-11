@@ -36,5 +36,6 @@ def infer_variable_shapes(net, feed_dict):
         vname = v.attr("name")
         vshape = shape[jnode_row_ptr[nindex[vname]]]
         if len(vshape) == 0:
+            print(vname)
             raise ValueError("not sufficient information in feed_dict")
         yield (v, vname, vshape)

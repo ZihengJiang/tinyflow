@@ -84,6 +84,66 @@ NNVM_REGISTER_OP(ones_like)
 .set_attr<FInferShape>("FInferShape", SameShape);
 
 
+struct ReshapeParam : public dmlc::Parameter<ReshapeParam> {
+  Tuple<int> shape;
+  DMLC_DECLARE_PARAMETER(ReshapeParam) {
+    DMLC_DECLARE_FIELD(shape).set_default(Tuple<int>());
+  }
+};
+DMLC_REGISTER_PARAMETER(ReshapeParam);
+
+inline bool ReshapeShape(const NodeAttrs& attrs,
+                      std::vector<TShape> *ishape,
+                      std::vector<TShape> *oshape) {
+  Tuple<int> shape = dmlc::get<ReshapeParam>(attrs.parsed).shape;
+  if (ishape->at(0).ndim() == 0) {
+    return false;
+  }
+  TShape new_shape(shape.ndim());
+  uint32_t need_infer_dim = 0;
+  uint32_t need_infer_count = 0;
+  for (uint32_t i = 0; i < shape.ndim(); ++i) {
+    if (shape[i] == -1) {
+      need_infer_dim = i;
+      need_infer_count++;
+    } else {
+      new_shape[i] = shape[i];
+    }
+  }
+  uint32_t new_num_elements = new_shape.Size();
+
+  if (need_infer_count > 1)
+    return false;
+
+  uint32_t old_num_elements = ishape->at(0).Size();
+
+  if (need_infer_count == 0) {
+      if (new_num_elements == old_num_elements) {
+        SHAPE_ASSIGN(oshape->at(0), new_shape);
+        return true;
+      } else {
+        return false;
+      }
+  } else { // need_infer_count == 1
+    new_shape[need_infer_dim] = old_num_elements / new_num_elements;
+    SHAPE_ASSIGN(oshape->at(0), new_shape);
+    return true;
+  }
+}
+
+
+NNVM_REGISTER_OP(__ewise_sum__)
+.describe("ewise sum")
+.set_num_inputs(nnvm::kVarg)
+.set_attr<FInplaceOption>("FInplaceOption", InplaceIn0Out0)
+.set_attr<FInferShape>("FInferShape", SameShape)
+.set_attr<FGradient>(
+    "FGradient", [](const NodePtr& n,
+                    const std::vector<NodeEntry>& ograds) {
+      return std::vector<NodeEntry>(n->num_inputs(), ograds[0]);
+});
+
+
 NNVM_REGISTER_OP(__add_symbol__)
 .describe("add two data together")
 .set_num_inputs(2)
