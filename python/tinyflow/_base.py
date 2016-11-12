@@ -83,15 +83,12 @@ def get_variable(name, initializer=None):
 
 def initialize_all_variables():
     global _all_variable_inits
-    print("num of all_variable_inits: %d" % len(_all_variable_inits))
-    for v in _all_variable_inits:
-        print(v.list_input_names())
     init_op = group(*_all_variable_inits)
     _all_variable_inits = []
     return init_op
 
 
-def placeholder(dtype, shape=None, name=None):
+def placeholder(dtype, name=None):
     v = symbol.placeholder(name=name, dtype=dtype)
     return v
 

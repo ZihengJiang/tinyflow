@@ -210,7 +210,6 @@ DMLC_REGISTER_PARAMETER(PadParam);
 inline bool PadShape(const NodeAttrs& attrs,
                          std::vector<TShape> *ishape,
                          std::vector<TShape> *oshape) {
-  LOG(INFO) << "PadShape Enter";
   const auto& param = dmlc::get<PadParam>(attrs.parsed);
   if (ishape->at(0).ndim() == 0) {
     return false;
@@ -218,7 +217,6 @@ inline bool PadShape(const NodeAttrs& attrs,
   TShape out = ishape->at(0);
   out[param.dim] += abs(param.pad);
   oshape->at(0) = out;
-  LOG(INFO) << "PadShape Exit";
   return true;
 }
 
@@ -338,7 +336,6 @@ inline bool BatchNormalizationShape(const NodeAttrs& attrs,
   const TShape& in = ishape->at(0);
   CHECK_EQ(in.ndim(), 4);
   TShape mean = TShape{in[1]};
-  LOG(INFO) << "BN mean shape: " << mean;
   SHAPE_ASSIGN(ishape->at(1), mean);
   SHAPE_ASSIGN(ishape->at(2), mean);
   oshape->at(0) = in;

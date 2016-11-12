@@ -20,6 +20,7 @@ https://arxiv.org/pdf/1603.05027v2.pdf
 https://arxiv.org/pdf/1512.03385v1.pdf
 https://arxiv.org/pdf/1605.07146v1.pdf
 """
+from nnvm import graph
 import tinyflow as tf
 import numpy as np
 from collections import namedtuple
@@ -54,6 +55,7 @@ class ResNet(object):
     self._build_model()
     if self.mode == 'train':
       self._build_train_op()
+
 
   def _stride_arr(self, stride):
     """Map a stride scalar to the stride array for tf.nn.conv2d."""
@@ -157,8 +159,8 @@ class ResNet(object):
     with tf.variable_scope('sub_add'):
       if in_filter != out_filter:
         orig_x = tf.nn.avg_pool(orig_x, ksize=stride, strides=stride, padding='VALID')
-        orig_x = tf.pad(orig_x, dim=3, pad=(out_filter-in_filter)//2)
-        orig_x = tf.pad(orig_x, dim=3, pad=-(out_filter-in_filter)//2)
+        orig_x = tf.pad(orig_x, dim=1, pad=(out_filter-in_filter)//2)
+        orig_x = tf.pad(orig_x, dim=1, pad=-(out_filter-in_filter)//2)
       x += orig_x
 
     return x
@@ -211,15 +213,16 @@ class ResNet(object):
     """Convolution."""
     with tf.variable_scope(name):
         n = filter_size * filter_size * out_filters
-        print("DW: [%d, %d, %d, %d]" % (out_filters, in_filters, filter_size, filter_size))
-        kernel = tf.get_variable('DW',
+        # print("[_conv:get_variable] %s_DW: [%d, %d, %d, %d]" %
+        #         (name, out_filters, in_filters, filter_size, filter_size))
+        kernel = tf.get_variable('conv_DW',
                 tf.normal([out_filters, in_filters, filter_size, filter_size], np.sqrt(2/n)))
-        return tf.nn.conv2d(x, kernel, strides=strides)
+        return tf.nn.conv2d(x, kernel, num_filter=out_filters, strides=strides)
 
   def _fully_connected(self, x, out_dim):
     """FullyConnected layer for final output."""
     x = tf.nn.flatten_layer(x)
-    w = tf.get_variable('DW') # need manually initlize
+    w = tf.get_variable('fc_DW') # need manually initlize
     b = tf.get_variable('biases', tf.zeros([out_dim]))
     return tf.nn.linear(x, w, b, num_hidden=out_dim, no_bias=False)
 

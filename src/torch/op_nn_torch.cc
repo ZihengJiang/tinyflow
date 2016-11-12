@@ -138,12 +138,13 @@ NNVM_REGISTER_OP(avg_pool)
     local dW = stride[3]
     local padH = 0
     local padW = 0
-    assert(kwarg.data_format == 'NCHW')
+    -- TODO: assert(kwarg.data_format == 'NCHW')
     if kwarg.padding == 'SAME' then
       padW = math.floor((kW - 1) / 2)
       padH = math.floor((kH - 1) / 2)
     end
-    return nn.SpatialAveragePooling(kW, kH, dW, dH, padW, padH)
+    local m = nn.SpatialAveragePooling(kW, kH, dW, dH, padW, padH)
+    return m
   end
 )");
 
@@ -153,7 +154,6 @@ NNVM_REGISTER_OP(batch_normalization)
   "FLuaCreateNNModule", R"(
   function(ishape, kwarg)
     local n = ishape[1][2]
-    print(string.format("batch_normalization: n = %d", n))
     return nn.SpatialBatchNormalization(n)
   end
 )");
