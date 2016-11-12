@@ -125,7 +125,6 @@ NNVM_REGISTER_OP(max_pool)
 )");
 
 
-// TODO: padding
 NNVM_REGISTER_OP(avg_pool)
 .set_attr<FLuaCreateNNModule>(
   "FLuaCreateNNModule", R"(
@@ -138,7 +137,7 @@ NNVM_REGISTER_OP(avg_pool)
     local dW = stride[3]
     local padH = 0
     local padW = 0
-    -- TODO: assert(kwarg.data_format == 'NCHW')
+    assert(kwarg.data_format == 'NCHW')
     if kwarg.padding == 'SAME' then
       padW = math.floor((kW - 1) / 2)
       padH = math.floor((kH - 1) / 2)

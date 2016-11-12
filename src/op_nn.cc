@@ -346,8 +346,8 @@ NNVM_REGISTER_OP(batch_normalization)
 .describe("batch normalization")
 .set_num_inputs(3)
 .set_attr<FListInputNames>("FListInputNames", [](const NodeAttrs& attrs) {
-    return std::vector<std::string>{"data", "mean", "variance"};
-  })
+    return std::vector<std::string>{"data", "gamma", "beta"};
+})
 .set_attr_parser(ParamParser<BatchNormalizationParam>)
 .include("nn_module")
 .set_attr<FInferShape>("FInferShape", BatchNormalizationShape);

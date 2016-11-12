@@ -64,7 +64,8 @@ def load_batch(fpath, label_key='labels'):
     data = d["data"]
     labels = d[label_key]
 
-    data = data.reshape(data.shape[0], 3, 32, 32)
+    data = data.reshape(data.shape[0], 3, 32, 32).astype(np.float32)
+    labels = np.array(labels, dtype="float32")
     return data, labels
 
 
@@ -74,8 +75,8 @@ def get_cifar10():
 
     nb_train_samples = 50000
 
-    X_train = np.zeros((nb_train_samples, 3, 32, 32), dtype="uint8")
-    y_train = np.zeros((nb_train_samples,), dtype="uint8")
+    X_train = np.zeros((nb_train_samples, 3, 32, 32), dtype="float32")
+    y_train = np.zeros((nb_train_samples,), dtype="float32")
 
     for i in range(1, 6):
         fpath = os.path.join(path, 'data_batch_' + str(i))
@@ -85,9 +86,6 @@ def get_cifar10():
 
     fpath = os.path.join(path, 'test_batch')
     X_test, y_test = load_batch(fpath)
-
-    y_train = np.reshape(y_train, (len(y_train), 1))
-    y_test = np.reshape(y_test, (len(y_test), 1))
 
     return CIFAR10Data(train=ArrayPacker(X_train, y_train),
             test=ArrayPacker(X_test, y_test))

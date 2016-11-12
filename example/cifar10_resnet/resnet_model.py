@@ -56,7 +56,6 @@ class ResNet(object):
     if self.mode == 'train':
       self._build_train_op()
 
-
   def _stride_arr(self, stride):
     """Map a stride scalar to the stride array for tf.nn.conv2d."""
     return [1, stride, stride, 1]
@@ -69,18 +68,8 @@ class ResNet(object):
 
     strides = [1, 2, 2]
     activate_before_residual = [True, False, False]
-    if self.hps.use_bottleneck:
-      res_func = self._bottleneck_residual
-      filters = [16, 64, 128, 256]
-    else:
-      res_func = self._residual
-      filters = [16, 16, 32, 64]
-      # Uncomment the following codes to use w28-10 wide residual network.
-      # It is more memory efficient than very deep residual network and has
-      # comparably good performance.
-      # https://arxiv.org/pdf/1605.07146v1.pdf
-      # filters = [16, 160, 320, 640]
-      # Update hps.num_residual_units to 9
+    res_func = self._residual
+    filters = [16, 16, 32, 64]
 
     with tf.variable_scope('unit_1_0'):
       x = res_func(x, filters[0], filters[1], self._stride_arr(strides[0]),
@@ -107,7 +96,7 @@ class ResNet(object):
         x = res_func(x, filters[3], filters[3], self._stride_arr(1), False)
 
     with tf.variable_scope('unit_last'):
-      x = self._batch_norm('final_bn', x)
+      x = self._batch_norm('final_bn', x, filters[3])
       x = self._relu(x, self.hps.relu_leakiness)
       x = self._global_avg_pool(x)
 
@@ -125,13 +114,15 @@ class ResNet(object):
 
     optimizer = tf.train.GradientDescentOptimizer(self.lrn_rate)
     apply_op = optimizer.minimize(self.cost)
-    train_ops = [apply_op] # + self._extra_train_ops
+    train_ops = [apply_op]
     self.train_op = tf.group(*train_ops)
 
-  def _batch_norm(self, name, x):
+  def _batch_norm(self, name, x, num_filter):
     """Batch normalization."""
     with tf.variable_scope(name):
-      y = tf.nn.batch_normalization(x)
+      gamma = tf.get_variable("bn_gamma", tf.normal([num_filter], 1.0))
+      beta  = tf.get_variable("bn_beta",  tf.zeros([num_filter]))
+      y = tf.nn.batch_normalization(x, gamma, beta)
       return y
 
   def _residual(self, x, in_filter, out_filter, stride,
@@ -139,20 +130,20 @@ class ResNet(object):
     """Residual unit with 2 sub layers."""
     if activate_before_residual:
       with tf.variable_scope('shared_activation'):
-        x = self._batch_norm('init_bn', x)
+        x = self._batch_norm('init_bn', x, in_filter)
         x = self._relu(x, self.hps.relu_leakiness)
         orig_x = x
     else:
       with tf.variable_scope('residual_only_activation'):
         orig_x = x
-        x = self._batch_norm('init_bn', x)
+        x = self._batch_norm('init_bn', x, in_filter)
         x = self._relu(x, self.hps.relu_leakiness)
 
     with tf.variable_scope('sub1'):
       x = self._conv('conv1', x, 3, in_filter, out_filter, stride)
 
     with tf.variable_scope('sub2'):
-      x = self._batch_norm('bn2', x)
+      x = self._batch_norm('bn2', x, out_filter)
       x = self._relu(x, self.hps.relu_leakiness)
       x = self._conv('conv2', x, 3, out_filter, out_filter, [1, 1, 1, 1])
 
@@ -165,56 +156,10 @@ class ResNet(object):
 
     return x
 
-  def _bottleneck_residual(self, x, in_filter, out_filter, stride,
-                           activate_before_residual=False):
-    """Bottleneck resisual unit with 3 sub layers."""
-    if activate_before_residual:
-      with tf.variable_scope('common_bn_relu'):
-        x = self._batch_norm('init_bn', x)
-        x = self._relu(x, self.hps.relu_leakiness)
-        orig_x = x
-    else:
-      with tf.variable_scope('residual_bn_relu'):
-        orig_x = x
-        x = self._batch_norm('init_bn', x)
-        x = self._relu(x, self.hps.relu_leakiness)
-
-    with tf.variable_scope('sub1'):
-      x = self._conv('conv1', x, 1, in_filter, out_filter/4, stride)
-
-    with tf.variable_scope('sub2'):
-      x = self._batch_norm('bn2', x)
-      x = self._relu(x, self.hps.relu_leakiness)
-      x = self._conv('conv2', x, 3, out_filter/4, out_filter/4, [1, 1, 1, 1])
-
-    with tf.variable_scope('sub3'):
-      x = self._batch_norm('bn3', x)
-      x = self._relu(x, self.hps.relu_leakiness)
-      x = self._conv('conv3', x, 1, out_filter/4, out_filter, [1, 1, 1, 1])
-
-    with tf.variable_scope('sub_add'):
-      if in_filter != out_filter:
-        orig_x = self._conv('project', orig_x, 1, in_filter, out_filter, stride)
-      x += orig_x
-
-    return x
-
-  # def _decay(self):
-  #   """L2 weight decay loss."""
-  #   costs = []
-  #   for var in tf.trainable_variables():
-  #     if var.op.name.find(r'DW') > 0:
-  #       costs.append(tf.nn.l2_loss(var))
-  #       # tf.histogram_summary(var.op.name, var)
-
-  #   return tf.mul(self.hps.weight_decay_rate, tf.add_n(costs))
-
   def _conv(self, name, x, filter_size, in_filters, out_filters, strides):
     """Convolution."""
     with tf.variable_scope(name):
         n = filter_size * filter_size * out_filters
-        # print("[_conv:get_variable] %s_DW: [%d, %d, %d, %d]" %
-        #         (name, out_filters, in_filters, filter_size, filter_size))
         kernel = tf.get_variable('conv_DW',
                 tf.normal([out_filters, in_filters, filter_size, filter_size], np.sqrt(2/n)))
         return tf.nn.conv2d(x, kernel, num_filter=out_filters, strides=strides)
@@ -222,7 +167,7 @@ class ResNet(object):
   def _fully_connected(self, x, out_dim):
     """FullyConnected layer for final output."""
     x = tf.nn.flatten_layer(x)
-    w = tf.get_variable('fc_DW') # need manually initlize
+    w = tf.get_variable('fc_DW')
     b = tf.get_variable('biases', tf.zeros([out_dim]))
     return tf.nn.linear(x, w, b, num_hidden=out_dim, no_bias=False)
 
@@ -231,5 +176,4 @@ class ResNet(object):
     return tf.leaky_relu(x, leakiness=leakiness)
 
   def _global_avg_pool(self, x):
-    # assert x.get_shape().ndims == 4
     return tf.reduce_mean(x, reduction_indices=[1, 2])
