@@ -3,7 +3,7 @@ from tinyflow.datasets import get_cifar10
 import resnet_model
 
 batch_size = 32
-num_epoch = 100
+num_epoch = 10
 num_batch = 600
 num_classes = 10
 
@@ -11,7 +11,7 @@ hps = resnet_model.HParams(batch_size=batch_size,
                            num_classes=num_classes,
                            min_lrn_rate=0.0001,
                            lrn_rate=0.1,
-                           num_residual_units=10,
+                           num_residual_units=5,
                            use_bottleneck=False,
                            weight_decay_rate=0.0002,
                            relu_leakiness=0.1,
