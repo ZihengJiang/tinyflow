@@ -69,7 +69,7 @@ def load_batch(fpath, label_key='labels'):
     return data, labels
 
 
-def get_cifar10():
+def get_cifar10(swap_axes=False):
     origin = "http://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
     path = "cifar-10-batches-py"
 
@@ -86,6 +86,10 @@ def get_cifar10():
 
     fpath = os.path.join(path, 'test_batch')
     X_test, y_test = load_batch(fpath)
+
+    if swap_axes:
+        X_train = np.swapaxes(X_train, 1, 3)
+        X_test  = np.swapaxes(X_test,  1, 3)
 
     return CIFAR10Data(train=ArrayPacker(X_train, y_train),
             test=ArrayPacker(X_test, y_test))
