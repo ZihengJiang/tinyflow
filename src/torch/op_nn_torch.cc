@@ -33,16 +33,6 @@ NNVM_REGISTER_OP(relu)
 )");
 
 
-NNVM_REGISTER_OP(leaky_relu)
-.set_attr<FLuaCreateNNModule>(
-  "FLuaCreateNNModule", R"(
-  function(ishape, kwarg)
-    local leakiness = tonumber(kwarg.leakiness)
-    return nn.LeakyReLU(leakiness)
-  end
-)");
-
-
 NNVM_REGISTER_OP(linear)
 .set_attr<FLuaCreateNNModule>(
   "FLuaCreateNNModule", R"(

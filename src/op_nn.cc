@@ -120,24 +120,6 @@ NNVM_REGISTER_OP(relu)
 .set_attr<bool>("TBackwardNeedOutputs", true);
 
 
-struct LeakyReLuParam : public dmlc::Parameter<LeakyReLuParam> {
-  double leakiness;
-
-  DMLC_DECLARE_PARAMETER(LeakyReLuParam) {
-    DMLC_DECLARE_FIELD(leakiness).set_default(0);
-  }
-};
-DMLC_REGISTER_PARAMETER(LeakyReLuParam);
-
-NNVM_REGISTER_OP(leaky_relu)
-.describe("Leaky ReLu operation")
-.set_attr_parser(ParamParser<LeakyReLuParam>)
-.set_num_inputs(1)
-.include("nn_module")
-.set_attr<FInferShape>("FInferShape", SameShape)
-.set_attr<bool>("TBackwardNeedOutputs", true);
-
-
 NNVM_REGISTER_OP(tanh)
 .describe("Tanh operation")
 .set_num_inputs(1)
