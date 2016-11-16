@@ -49,6 +49,7 @@ struct VarState {
   }
 };
 
+
 // shared variable map structure
 using VarStateMap = std::unordered_map<std::string, std::shared_ptr<VarState> >;
 // operator executor closures
@@ -137,6 +138,7 @@ class TorchExecutor {
   // internal symbol and graph
   nnvm::Symbol symbol_;
   nnvm::Graph graph_;
+  // variable states map.
   VarStateMap* var_states_;
   // shape vector in graph attribute
   const ShapeVector* node_shape_{nullptr};
@@ -264,7 +266,6 @@ void TorchExecutor::Init(nnvm::Symbol symbol,
   graph_.outputs = symbol.outputs;
   symbol_ = symbol;
   var_states_ = states;
-
   SetupAuxiliaryMembers();
 }
 
@@ -408,8 +409,6 @@ void TorchExecutor::SetupShapeDType(
       CHECK(state->initialized())
           << "Attempt to execute a graph un-initialized Variable";
       if (node_shape_->at(idx.entry_id(nid, 0)) != state->blob.shape) {
-        // LOG(INFO) << "node shape: " << node_shape_->at(idx.entry_id(nid, 0));
-        // LOG(INFO) << "blob shape: " << state->blob.shape;
         need_redo_infer = true; break;
       }
       if (node_dtype_->at(idx.entry_id(nid, 0)) != state->blob.dtype) {
