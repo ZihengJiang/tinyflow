@@ -567,7 +567,9 @@ void TorchExecutor::SetupOpExecs() {
           return m:cuda()
         end
         local net = nn.Sequential():add(m):cuda()
-        net = cudnn.convert(net, cudnn)
+        if torch.typename(m) ~= 'nn.ReLU' then
+            net = cudnn.convert(net, cudnn)
+        end
         return net.modules[1]
       end
       if torch.isTypeOf(m, nn.Module) then
