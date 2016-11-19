@@ -1,15 +1,15 @@
 // Copyright (c) 2016 by Contributors
 // implementation of operators FCodeGen attribute
 #include <tinyflow/base.h>
-#include <nnvm-rtc/base.h>
-#include <nnvm-rtc/ast.h>
+#include <nnvm-fusion/base.h>
+#include <nnvm-fusion/ast.h>
 #include <vector>
 
 using nnvm::NodePtr;
-using nnvm::rtc::FCodeGen;
-using nnvm::rtc::ASTPtr;
-using nnvm::rtc::FloatAST;
-using nnvm::rtc::CallAST;
+using nnvm::fusion::FCodeGen;
+using nnvm::fusion::ASTPtr;
+using nnvm::fusion::FloatAST;
+using nnvm::fusion::CallAST;
 
 namespace tinyflow {
 
@@ -142,7 +142,5 @@ NNVM_REGISTER_OP(__rpow_scalar__)
     };
   }
 );
-
-
 
 }  // namespace tinyflow

@@ -1,8 +1,8 @@
 // Copyright (c) 2016 by Contributors
 #include <tinyflow/base.h>
 #include <nnvm/pass_functions.h>
-#include <nnvm-rtc/base.h>
-#include <nnvm-rtc/rtc.h>
+#include <nnvm-fusion/base.h>
+#include <nnvm-fusion/rtc.h>
 #include <memory>
 #include <functional>
 #include "./op_util.h"
@@ -16,8 +16,8 @@ using nnvm::IndexedGraph;
 using nnvm::ShapeVector;
 using nnvm::DTypeVector;
 using nnvm::StorageVector;
-using nnvm::rtc::RTC;
-using nnvm::rtc::RTCMap;
+using nnvm::fusion::RTC;
+using nnvm::fusion::RTCMap;
 
 class TorchExecutor;
 
@@ -183,13 +183,6 @@ Session* Session::Create(const std::string& option) {
   return new TorchSession(option);
 }
 
-void PrintSymbolOutputNames(Symbol* s) {
-  LOG(INFO) << "size = " << s->outputs.size();
-  std::vector<std::string> output_names = s->ListOutputNames();
-  for (auto name : output_names) {
-    std::cout << name << std::endl;
-  }
-}
 
 const std::vector<TBlob>& TorchSession::Run(
     nnvm::Symbol* sym,
@@ -198,54 +191,23 @@ const std::vector<TBlob>& TorchSession::Run(
     auto& entry = cached_execs_.at(sym);
     const nnvm::Symbol& s = entry.exec->symbol();
     bool stale_exec = (s.outputs.size() != sym->outputs.size());
-    // LOG(INFO) << "stale: " << (stale_exec ? "true" : "false");
-    if (stale_exec) {
-      std::vector<std::string> sym_output_names = sym->ListOutputNames();
-      std::vector<std::string> s_output_names   = s.ListOutputNames();
-      // LOG(INFO) << "sym.outputs.size() = " << sym->outputs.size();
-      for (auto name : sym_output_names) {
-        std::cout << name << " ";
-      }
-      std::cout << std::endl;
-      // LOG(INFO) << "s.outputs.size()   = " << s.outputs.size();
-      for (auto name : s_output_names) {
-        std::cout << name << " ";
-      }
-      std::cout << std::endl;
-    }
     if (!stale_exec) {
       for (size_t i = 0; i < s.outputs.size(); ++i) {
         if (s.outputs[i].node.get() != sym->outputs[i].node.get() ||
             s.outputs[i].index != sym->outputs[i].index ||
             s.outputs[i].version != sym->outputs[i].version) {
-          LOG(INFO) << "node"    << s.outputs[i].node->attrs.name;
-          LOG(INFO) << "index"   << s.outputs[i].index;
-          LOG(INFO) << "version" << s.outputs[i].version;
-          LOG(INFO) << "node"    << sym->outputs[i].node->attrs.name;
-          LOG(INFO) << "index"   << sym->outputs[i].index;
-          LOG(INFO) << "version" << sym->outputs[i].version;
           stale_exec = true; break;
         }
       }
     }
     if (!stale_exec) {
-      // LOG(INFO) << "Reuse Executor";
       ++entry.use_count;
       return entry.exec->Run(inputs);
     } else {
       cached_execs_.erase(sym);
     }
-  } else {
-    // LOG(INFO) << "sym not in cached_execs";
-    // PrintSymbolOutputNames(sym);
-    // LOG(INFO) << "In cached_execs";
-    // for (auto kv : cached_execs_) {
-    //   PrintSymbolOutputNames(kv.first);
-    //   std::cout << std::endl;
-    // }
   }
   LOG(INFO) << "New Executor";
-  LOG(INFO) << "sym: " << reinterpret_cast<uint64_t>(sym);
   // dump technique, remove all previous executors
   // better strategy, LRU?
   cached_execs_.clear();
@@ -361,15 +323,11 @@ void TorchExecutor::Setup(const std::unordered_map<std::string, TBlob>& inputs) 
   bool need_redo_infer;
   SetupShapeDType(inputs, &need_redo_infer);
   if (enable_fusion_ && need_redo_infer) {
-    const auto& idx = graph_.indexed_graph();
-    // LOG(INFO) << "Apply Fusion";
     graph_ = ApplyPasses(std::move(graph_), {"Fusion", "CodeGen", "RTCGen"});
     node_rtc_ = const_cast<RTCMap*>(&(graph_.GetAttr<RTCMap>("rtc")));
-    // LOG(INFO) << "After Fusion";
     ClearAuxiliaryMembers();
     SetupAuxiliaryMembers();
 
-    // LOG(INFO) << "Clear Shape";
     node_shape_ = nullptr;
     node_dtype_ = nullptr;
     SetupShapeDType(inputs, &need_redo_infer);
@@ -394,11 +352,9 @@ void TorchExecutor::Setup(const std::unordered_map<std::string, TBlob>& inputs) 
 void TorchExecutor::SetupShapeDType(
     const std::unordered_map<std::string, TBlob>& inputs,
     bool* p_need_redo_infer) {
-  // LOG(INFO) << "SetupShape Begin";
   const auto& idx = graph_.indexed_graph();
   bool& need_redo_infer = *p_need_redo_infer;
   need_redo_infer = (node_shape_ == nullptr);
-  // LOG(INFO) << "need_redo_infer: " << (need_redo_infer ? "true" : "false");
 
   // check the variable states
   if (!need_redo_infer) {
@@ -416,7 +372,6 @@ void TorchExecutor::SetupShapeDType(
       }
     }
   }
-  // LOG(INFO) << "need_redo_infer: " << (need_redo_infer ? "true" : "false");
 
   // check placeholder shapes.
   if (!need_redo_infer) {
@@ -426,8 +381,6 @@ void TorchExecutor::SetupShapeDType(
           << "Not enought placeholder argument to feed_dict";
       const TBlob& value = inputs.at(key);
       if (node_shape_->at(idx.entry_id(nid, 0)) != value.shape) {
-        // LOG(INFO) << "node  shape: " << node_shape_->at(idx.entry_id(nid, 0));
-        // LOG(INFO) << "value shape: " << value.shape;
         need_redo_infer = true; break;
       }
       if (node_dtype_->at(idx.entry_id(nid, 0)) != value.dtype) {
@@ -435,11 +388,9 @@ void TorchExecutor::SetupShapeDType(
       }
     }
   }
-  // LOG(INFO) << "need_redo_infer: " << (need_redo_infer ? "true" : "false");
 
   if (!need_redo_infer) {
-      // LOG(INFO) << "SetupShape End";
-      return;
+    return;
   }
   // run shape inference.
   ShapeVector new_shape(idx.num_node_entries(), TShape());
@@ -479,7 +430,6 @@ void TorchExecutor::SetupShapeDType(
         dev_mask_,
         node_dtype_->at(idx.entry_id(nid, 0)));
   }
-  // LOG(INFO) << "SetupShape End";
 }
 
 
@@ -703,7 +653,6 @@ void TorchExecutor::SetupOpExecs() {
   // setup the array and requirements.
   for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
     const auto& inode = idx[nid];
-    // LOG(INFO) << "nid: " << nid <<  ", SetupOpExecs: " << inode.source->attrs.name;
     if (inode.source->is_variable()) continue;
     std::vector<LuaRef> in_array, out_array; // TODO
     for (const auto& e : inode.inputs) {

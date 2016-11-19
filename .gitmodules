@@ -4,6 +4,6 @@
 [submodule "dmlc-core"]
 	path = dmlc-core
 	url = https://github.com/dmlc/dmlc-core
-[submodule "nnvm-rtc"]
-	path = nnvm-rtc
-	url = https://github.com/ZihengJiang/nnvm-rtc.git
+[submodule "nnvm-fusion"]
+	path = nnvm-fusion
+	url = https://github.com/ZihengJiang/nnvm-fusion.git

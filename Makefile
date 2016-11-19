@@ -10,13 +10,13 @@ ifndef NNVM_PATH
 	NNVM_PATH = $(ROOTDIR)/nnvm
 endif
 
-ifndef NNVM_RTC_PATH
-	NNVM_RTC_PATH = $(ROOTDIR)/nnvm-rtc
+ifndef NNVM_FUSION_PATH
+	NNVM_FUSION_PATH = $(ROOTDIR)/nnvm-fusion
 endif
 
 export LDFLAGS = -pthread -lm
 export CFLAGS =  -std=c++11 -Wall -O2 -msse2  -Wno-unknown-pragmas -funroll-loops\
-	  -fPIC -Iinclude -Idmlc-core/include -I$(NNVM_PATH)/include -I$(NNVM_RTC_PATH)/include
+	  -fPIC -Iinclude -Idmlc-core/include -I$(NNVM_PATH)/include -I$(NNVM_FUSION_PATH)/include
 
 .PHONY: clean all test lint doc
 
@@ -43,7 +43,7 @@ OBJ = $(patsubst %.cc, build/%.o, $(SRC))
 CUSRC = $(wildcard src/*.cu src/*/*.cu src/*/*/*.cu)
 CUOBJ = $(patsubst %.cu, build/%_gpu.o, $(CUSRC))
 
-LIB_DEP = $(NNVM_PATH)/lib/libnnvm.a $(NNVM_RTC_PATH)/lib/libnnvm-rtc.a
+LIB_DEP = $(NNVM_PATH)/lib/libnnvm.a $(NNVM_FUSION_PATH)/lib/libnnvm-fusion.a
 ALL_DEP = $(OBJ) $(LIB_DEP)
 
 all: lib/libtinyflow.so
@@ -66,8 +66,8 @@ lib/libtinyflow.so: $(ALL_DEP)
 $(NNVM_PATH)/lib/libnnvm.a:
 	+ cd $(NNVM_PATH); make lib/libnnvm.a; cd $(ROOTDIR)
 
-$(NNVM_RTC_PATH)/lib/libnnvm-rtc.a:
-	+ cd $(NNVM_RTC_PATH); make lib/libnnvm-rtc.a; cd $(ROOTDIR)
+$(NNVM_FUSION_PATH)/lib/libnnvm-fusion.a:
+	+ cd $(NNVM_FUSION_PATH); make lib/libnnvm-fusion.a; cd $(ROOTDIR)
 
 lint:
 	python2 dmlc-core/scripts/lint.py tinyflow cpp include src
