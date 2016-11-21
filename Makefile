@@ -11,7 +11,7 @@ ifndef NNVM_PATH
 endif
 
 ifndef NNVM_FUSION_PATH
-	NNVM_FUSION_PATH = $(ROOTDIR)/nnvm-fusion
+	NNVM_FUSION_PATH = $(NNVM_PATH)/plugin/nnvm-fusion/
 endif
 
 export LDFLAGS = -pthread -lm
@@ -43,7 +43,7 @@ OBJ = $(patsubst %.cc, build/%.o, $(SRC))
 CUSRC = $(wildcard src/*.cu src/*/*.cu src/*/*/*.cu)
 CUOBJ = $(patsubst %.cu, build/%_gpu.o, $(CUSRC))
 
-LIB_DEP = $(NNVM_PATH)/lib/libnnvm.a $(NNVM_FUSION_PATH)/lib/libnnvm-fusion.a
+LIB_DEP = $(NNVM_PATH)/lib/libnnvm.a
 ALL_DEP = $(OBJ) $(LIB_DEP)
 
 all: lib/libtinyflow.so
