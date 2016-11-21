@@ -1,8 +1,10 @@
 // Copyright (c) 2016 by Contributors
 #include <tinyflow/base.h>
 #include <nnvm/pass_functions.h>
+#if TINYFLOW_USE_FUSION == 1
 #include <nnvm-fusion/base.h>
 #include <nnvm-fusion/rtc.h>
+#endif
 #include <memory>
 #include <functional>
 #include "./op_util.h"
@@ -16,8 +18,10 @@ using nnvm::IndexedGraph;
 using nnvm::ShapeVector;
 using nnvm::DTypeVector;
 using nnvm::StorageVector;
+#if TINYFLOW_USE_FUSION == 1
 using nnvm::fusion::RTC;
 using nnvm::fusion::RTCMap;
+#endif
 
 class TorchExecutor;
 
@@ -144,6 +148,7 @@ class TorchExecutor {
   const ShapeVector* node_shape_{nullptr};
   // type vector in graph attribute
   const DTypeVector* node_dtype_{nullptr};
+  // map nid->rtc
   RTCMap* node_rtc_{nullptr};
   // ----------------------------
   // node auxiliary data structures
@@ -183,7 +188,6 @@ Session* Session::Create(const std::string& option) {
   return new TorchSession(option);
 }
 
-
 const std::vector<TBlob>& TorchSession::Run(
     nnvm::Symbol* sym,
     const std::unordered_map<std::string, TBlob>& inputs) {
@@ -207,7 +211,6 @@ const std::vector<TBlob>& TorchSession::Run(
       cached_execs_.erase(sym);
     }
   }
-  LOG(INFO) << "New Executor";
   // dump technique, remove all previous executors
   // better strategy, LRU?
   cached_execs_.clear();
@@ -226,7 +229,7 @@ void TorchExecutor::Init(nnvm::Symbol symbol,
   if (dev_mask_ == kGPU) TorchState::ThreadLocalState()->InitGPU();
   enable_fusion_ = enable_fusion;
   graph_.outputs = symbol.outputs;
-  symbol_ = symbol;
+  symbol_.outputs = graph_.outputs;
   var_states_ = states;
   SetupAuxiliaryMembers();
 }
@@ -322,6 +325,7 @@ TorchExecutor::Run(const std::unordered_map<std::string, TBlob>& inputs) {
 void TorchExecutor::Setup(const std::unordered_map<std::string, TBlob>& inputs) {
   bool need_redo_infer;
   SetupShapeDType(inputs, &need_redo_infer);
+#if TINYFLOW_USE_FUSION == 1
   if (enable_fusion_ && need_redo_infer) {
     graph_ = ApplyPasses(std::move(graph_), {"Fusion", "CodeGen", "RTCGen"});
     node_rtc_ = const_cast<RTCMap*>(&(graph_.GetAttr<RTCMap>("rtc")));
@@ -332,6 +336,7 @@ void TorchExecutor::Setup(const std::unordered_map<std::string, TBlob>& inputs) 
     node_dtype_ = nullptr;
     SetupShapeDType(inputs, &need_redo_infer);
   }
+#endif
   if (need_redo_infer) SetupStorage();
   if (need_redo_infer) {
     op_execs_.clear();
@@ -372,7 +377,6 @@ void TorchExecutor::SetupShapeDType(
       }
     }
   }
-
   // check placeholder shapes.
   if (!need_redo_infer) {
     for (uint32_t nid : placeholder_nids_) {
@@ -389,9 +393,7 @@ void TorchExecutor::SetupShapeDType(
     }
   }
 
-  if (!need_redo_infer) {
-    return;
-  }
+  if (!need_redo_infer) return;
   // run shape inference.
   ShapeVector new_shape(idx.num_node_entries(), TShape());
   DTypeVector new_dtype(idx.num_node_entries(), -1);
@@ -431,7 +433,6 @@ void TorchExecutor::SetupShapeDType(
         node_dtype_->at(idx.entry_id(nid, 0)));
   }
 }
-
 
 void TorchExecutor::SetupStorage() {
   const auto& idx = graph_.indexed_graph();
@@ -517,9 +518,7 @@ void TorchExecutor::SetupOpExecs() {
           return m:cuda()
         end
         local net = nn.Sequential():add(m):cuda()
-        if torch.typename(m) ~= 'nn.ReLU' then
-            net = cudnn.convert(net, cudnn)
-        end
+        net = cudnn.convert(net, cudnn)
         return net.modules[1]
       end
       if torch.isTypeOf(m, nn.Module) then
@@ -654,7 +653,7 @@ void TorchExecutor::SetupOpExecs() {
   for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
     const auto& inode = idx[nid];
     if (inode.source->is_variable()) continue;
-    std::vector<LuaRef> in_array, out_array; // TODO
+    std::vector<LuaRef> in_array, out_array;
     for (const auto& e : inode.inputs) {
       in_array.push_back(data_entry_[idx.entry_id(e)]);
     }
@@ -663,10 +662,14 @@ void TorchExecutor::SetupOpExecs() {
       out_array.push_back(data_entry_[eid]);
     }
 
+#if TINYFLOW_USE_FUSION == 1
     if (node_rtc_ && node_rtc_->count(nid)) {
       // rtc compute
       op_execs_[nid] = rtc_closure_generate(node_rtc_->at(nid), in_array, out_array);
     } else if (lua_compute_code.count(inode.source->op())) {
+#else
+    if (lua_compute_code.count(inode.source->op())) {
+#endif
       // compute function
       std::string lua_str = "return " + lua_compute_code[inode.source->op()];
       LuaRef fcompute = lua->Eval(lua_str);

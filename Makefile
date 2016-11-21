@@ -66,9 +66,6 @@ lib/libtinyflow.so: $(ALL_DEP)
 $(NNVM_PATH)/lib/libnnvm.a:
 	+ cd $(NNVM_PATH); make lib/libnnvm.a; cd $(ROOTDIR)
 
-$(NNVM_FUSION_PATH)/lib/libnnvm-fusion.a:
-	+ cd $(NNVM_FUSION_PATH); make lib/libnnvm-fusion.a; cd $(ROOTDIR)
-
 lint:
 	python2 dmlc-core/scripts/lint.py tinyflow cpp include src
 

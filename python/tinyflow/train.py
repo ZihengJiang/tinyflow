@@ -1,5 +1,4 @@
 from . import _base
-from . import _session
 from nnvm import symbol as _sym
 
 class GradientDescentOptimizer(object):
@@ -11,7 +10,6 @@ class GradientDescentOptimizer(object):
         grads = _base.gradients(obj, variables)
         updates = []
         for v, g in zip(variables, grads):
-            self.g = g
             updates.append(_sym.assign(v, v + (-self.learning_rate) * g))
         return _base.group(*updates)
 
