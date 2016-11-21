@@ -202,18 +202,6 @@ NNVM_REGISTER_OP(__div_scalar__)
 )");
 
 
-NNVM_REGISTER_OP(__rdiv_scalar__)
-.set_attr<FLuaCompute>(
-  "FLuaCompute", R"(
-  function(x, y, kwarg)
-    local scalar = tonumber(kwarg.scalar)
-    return function()
-      torch.mul(y[1], torch.pow(x[1], -1), scalar)
-    end
-  end
-)");
-
-
 NNVM_REGISTER_OP(exp)
 .set_attr<FLuaCompute>(
   "FLuaCompute", R"(

@@ -40,7 +40,6 @@ def test_ewise():
     check_ewise_scalar(lambda x, y: x*y)
     check_ewise_scalar(lambda x, y: x/y)
     check_ewise_rscalar(lambda x, y: x-y)
-    check_ewise_rscalar(lambda x, y: x/y)
     check_ewise_rscalar(lambda x, y: x**y)
 
 def test_exp():
