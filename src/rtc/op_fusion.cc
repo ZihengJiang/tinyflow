@@ -1,5 +1,6 @@
 // Copyright (c) 2016 by Contributors
 // implementation of operators FCodeGen attribute
+#if TINYFLOW_USE_FUSION == 1
 #include <tinyflow/base.h>
 #include <nnvm-fusion/base.h>
 #include <nnvm-fusion/ast.h>
@@ -144,3 +145,4 @@ NNVM_REGISTER_OP(__rpow_scalar__)
 );
 
 }  // namespace tinyflow
+#endif

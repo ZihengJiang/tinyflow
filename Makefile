@@ -10,13 +10,19 @@ ifndef NNVM_PATH
 	NNVM_PATH = $(ROOTDIR)/nnvm
 endif
 
-ifndef NNVM_FUSION_PATH
-	NNVM_FUSION_PATH = $(NNVM_PATH)/plugin/nnvm-fusion/
-endif
-
 export LDFLAGS = -pthread -lm
 export CFLAGS =  -std=c++11 -Wall -O2 -msse2  -Wno-unknown-pragmas -funroll-loops\
-	  -fPIC -Iinclude -Idmlc-core/include -I$(NNVM_PATH)/include -I$(NNVM_FUSION_PATH)/include
+	  -fPIC -Iinclude -Idmlc-core/include -I$(NNVM_PATH)/include
+
+# whether use fusion
+USE_FUSION = 0
+ifeq ($(USE_FUSION), 1)
+  ifndef NNVM_FUSION_PATH
+  	NNVM_FUSION_PATH = $(NNVM_PATH)/plugin/nnvm-fusion/
+  endif
+  CFLAGS  += -DTINYFLOW_USE_FUSION=1 -I$(NNVM_FUSION_PATH)/include -I$(CUDA_PATH)/include
+  LDFLAGS += -L$(CUDA_PATH)/lib64 -lcuda -lnvrtc -lcudart
+endif
 
 .PHONY: clean all test lint doc
 
@@ -25,17 +31,14 @@ UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S), Darwin)
 	WHOLE_ARCH= -all_load
 	NO_WHOLE_ARCH= -noall_load
-	CFLAGS  += -I$(TORCH_PATH)/install/include -I$(TORCH_PATH)/install/include/TH \
-			   -I$(CUDA_PATH)/include
-	LDFLAGS += -L$(TORCH_PATH)/install/lib -llua -lluaT -lTH \
-			   -L$(CUDA_PATH)/lib64 -lcuda -lnvrtc -lcudart
+	CFLAGS  += -I$(TORCH_PATH)/install/include -I$(TORCH_PATH)/install/include/TH
+	LDFLAGS += -L$(TORCH_PATH)/install/lib -llua -lluaT -lTH
 else
 	WHOLE_ARCH= --whole-archive
 	NO_WHOLE_ARCH= --no-whole-archive
 	CFLAGS  += -I$(TORCH_PATH)/install/include -I$(TORCH_PATH)/install/include/TH \
-			   -I$(TORCH_PATH)/install/include/THC/ -I$(CUDA_PATH)/include
-	LDFLAGS += -L$(TORCH_PATH)/install/lib -lluajit -lluaT -lTH -lTHC \
-			   -L$(CUDA_PATH)/lib64 -lcuda -lnvrtc -lcudart
+			   -I$(TORCH_PATH)/install/include/THC/
+	LDFLAGS += -L$(TORCH_PATH)/install/lib -lluajit -lluaT -lTH -lTHC
 endif
 
 SRC = $(wildcard src/*.cc src/*/*.cc src/*/*/*.cc)

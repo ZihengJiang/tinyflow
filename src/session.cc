@@ -59,35 +59,6 @@ using VarStateMap = std::unordered_map<std::string, std::shared_ptr<VarState> >;
 // operator executor closures
 using FOpExec = std::function<void()>;
 
-static FOpExec rtc_closure_generate(RTC& rtc,
-                                    const std::vector<LuaRef>& input_luaref,
-                                    std::vector<LuaRef>& output_luaref) {
-  auto ret = [&rtc, input_luaref, output_luaref]() {
-    auto* th = TorchState::ThreadLocalState();
-    CUdeviceptr input_dptr[input_luaref.size()], output_dptr[output_luaref.size()];
-    std::vector<void*> input, output;
-
-    for (size_t i = 0; i < input_luaref.size(); ++i) {
-      input_dptr[i] = reinterpret_cast<CUdeviceptr>(th->GetTBlob(input_luaref[i]).data);
-      input.push_back(&input_dptr[i]);
-    }
-
-    for (size_t i = 0; i < output_luaref.size(); ++i) {
-      output_dptr[i] = reinterpret_cast<CUdeviceptr>(th->GetTBlob(output_luaref[i]).data);
-      output.push_back(&output_dptr[i]);
-    }
-
-    TShape ewise_shape = th->GetTBlob(output_luaref[0]).shape;
-    int num_elements = 1;
-    for (auto it = ewise_shape.begin(); it != ewise_shape.end(); ++it) {
-        num_elements *= (*it);
-    }
-
-    rtc.Run(input, output, num_elements);
-  };
-  return ret;
-}
-
 // torch session.
 class TorchSession : public Session {
  public:
@@ -139,6 +110,10 @@ class TorchExecutor {
   void SetupShapeDType(const std::unordered_map<std::string, TBlob>& inputs, bool* need_redo_infer);
   void SetupStorage();
   void SetupOpExecs();
+#if TINYFLOW_USE_FUSION == 1
+  FOpExec GenerateRTCClosure(RTC& rtc,
+          const std::vector<LuaRef>& input_luaref, std::vector<LuaRef>& output_luaref);
+#endif
   // internal symbol and graph
   nnvm::Symbol symbol_;
   nnvm::Graph graph_;
@@ -148,12 +123,15 @@ class TorchExecutor {
   const ShapeVector* node_shape_{nullptr};
   // type vector in graph attribute
   const DTypeVector* node_dtype_{nullptr};
+#if TINYFLOW_USE_FUSION == 1
   // map nid->rtc
   RTCMap* node_rtc_{nullptr};
+#endif
   // ----------------------------
   // node auxiliary data structures
   // The device of this executor
   int dev_mask_{kGPU};
+  // whether to enable fusion
   bool enable_fusion_;
   // node id of place holder ops
   std::vector<uint32_t> placeholder_nids_;
@@ -665,7 +643,7 @@ void TorchExecutor::SetupOpExecs() {
 #if TINYFLOW_USE_FUSION == 1
     if (node_rtc_ && node_rtc_->count(nid)) {
       // rtc compute
-      op_execs_[nid] = rtc_closure_generate(node_rtc_->at(nid), in_array, out_array);
+      op_execs_[nid] = GenerateRTCClosure(node_rtc_->at(nid), in_array, out_array);
     } else if (lua_compute_code.count(inode.source->op())) {
 #else
     if (lua_compute_code.count(inode.source->op())) {
@@ -720,5 +698,34 @@ void TorchExecutor::SetupOpExecs() {
     }
   }
 }
+
+#if TINYFLOW_USE_FUSION == 1
+FOpExec TorchExecutor::GenerateRTCClosure(RTC& rtc,
+    const std::vector<LuaRef>& input_luaref, std::vector<LuaRef>& output_luaref) {
+  auto ret = [&rtc, input_luaref, output_luaref]() {
+    auto* th = TorchState::ThreadLocalState();
+    CUdeviceptr input_dptr[input_luaref.size()], output_dptr[output_luaref.size()];
+    std::vector<void*> input, output;
+
+    for (size_t i = 0; i < input_luaref.size(); ++i) {
+      input_dptr[i] = reinterpret_cast<CUdeviceptr>(th->GetTBlob(input_luaref[i]).data);
+      input.push_back(&input_dptr[i]);
+    }
+
+    for (size_t i = 0; i < output_luaref.size(); ++i) {
+      output_dptr[i] = reinterpret_cast<CUdeviceptr>(th->GetTBlob(output_luaref[i]).data);
+      output.push_back(&output_dptr[i]);
+    }
+
+    TShape ewise_shape = th->GetTBlob(output_luaref[0]).shape;
+    int num_elements = 1;
+    for (auto it = ewise_shape.begin(); it != ewise_shape.end(); ++it) {
+        num_elements *= (*it);
+    }
+    rtc.Run(input, output, num_elements);
+  };
+  return ret;
+}
+#endif
 
 }  // namespace tinyflow
